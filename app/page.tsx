@@ -107,8 +107,8 @@ const Navbar = () => (
         <span className="text-lg font-bold tracking-wide">Editra</span>
       </a>
       <nav className="hidden items-center gap-6 text-sm text-slate-200 md:flex">
+        <a href="#domu" className="hover:text-white">Domů</a>
         <a href="#sluzby" className="hover:text-white">Služby</a>
-        <a href="#pipeline" className="hover:text-white">Pipeline</a>
         <a href="#portfolio" className="hover:text-white">Portfolio</a>
         <a href="#onas" className="hover:text-white">O nás</a>
         <a href="#kontakt" className="hover:text-white">Kontakt</a>
@@ -132,7 +132,7 @@ const Hero = () => (
             transition={{ duration: 0.6 }}
             className="text-4xl font-semibold leading-tight text-white sm:text-6xl"
           >
-            Postprodukce & VFX v <span className="text-sky-400">Plzni</span>
+            Postprodukce & VFX v Plzni | <span className="text-sky-400">Editra</span>
           </motion.h1>
           <motion.p
             initial={{ opacity: 0, y: 10 }}
@@ -140,9 +140,9 @@ const Hero = () => (
             transition={{ delay: 0.1, duration: 0.6 }}
             className="mt-5 max-w-xl text-base text-slate-300 sm:text-lg"
           >
-            Jsme studio <strong>Editra</strong>. Kombinujeme špičkovou postprodukci a VFX
-            s vlastním vývojářským týmem. Stavíme postprodukční pipeline, automatizujeme
-            kontrolu kvality skripty a analyzujeme data, aby každý výstup prošel na první dobrou.
+            Jsme studio <strong>Editra</strong>. Color grading a VFX přidáme podle potřeby. 
+            Čisté výstupy pro TV, online i kino – rychle a spolehlivě. To vše pod záštitou našeho
+            <strong> automatizovaného QC Enginu.</strong>
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -151,17 +151,17 @@ const Hero = () => (
             className="mt-8 flex flex-wrap gap-3"
           >
             <Button href="#kontakt">
-              Domluvme si hovor <ArrowRight className="h-4 w-4" />
+              Domluvme si schůzku <ArrowRight className="h-4 w-4" />
             </Button>
-            <Button href="#portfolio" variant="ghost">
+            <Button href="https://www.youtube.com/embed/P-m6gLofH-Q" variant="ghost">
               Zhlédnout showreel <PlayCircle className="h-4 w-4" />
             </Button>
           </motion.div>
           <div className="mt-8 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-            <Badge>Automatizované QC</Badge>
+            <Badge>Postprodukce</Badge>
             <Badge>VFX & Compositing</Badge>
             <Badge>Color & Finishing</Badge>
-            <Badge>FFmpeg / Python</Badge>
+            <Badge>Automatizované QC</Badge>
           </div>
         </div>
         <motion.div
@@ -222,6 +222,20 @@ const Services = () => (
         subtitle="Od prvního záběru po finální master. Vše pod jednou střechou – kreativně i technicky."
       />
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+         <Card>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/20">
+              <Film className="h-5 w-5 text-sky-300" />
+            </div>
+            <h3 className="text-lg font-semibold text-white">Postprodukce</h3>
+          </div>
+          <p className="mt-2 text-sm text-slate-300">
+            Offline/online střih, color grading, mastering a příprava dodávek pro TV/online/kino.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge>Premiere Pro</Badge><Badge>DaVinci Resolve</Badge><Badge>ProRes / IMF</Badge>
+          </div>
+        </Card>
         <Card>
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/20">
@@ -239,23 +253,9 @@ const Services = () => (
         <Card>
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/20">
-              <Film className="h-5 w-5 text-sky-300" />
-            </div>
-            <h3 className="text-lg font-semibold text-white">Edit & Finishing</h3>
-          </div>
-          <p className="mt-2 text-sm text-slate-300">
-            Offline/online střih, color grading, mastering a příprava dodávek pro TV/online/kino.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Badge>Premiere Pro</Badge><Badge>DaVinci Resolve</Badge><Badge>ProRes / IMF</Badge>
-          </div>
-        </Card>
-        <Card>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/20">
               <Cpu className="h-5 w-5 text-sky-300" />
             </div>
-            <h3 className="text-lg font-semibold text-white">Vývoj & Pipeline</h3>
+            <h3 className="text-lg font-semibold text-white">Color grading & finishing</h3>
           </div>
           <p className="mt-2 text-sm text-slate-300">
             Tvoříme skripty a nástroje: ingest, transkódování, verze, kontrola hlasitosti, kontrola titulků, QC reporty.
@@ -269,37 +269,7 @@ const Services = () => (
   </section>
 );
 
-// --- Pipeline ---
-const Pipeline = () => (
-  <section id="pipeline" className="">
-    <Container className="py-14">
-      <SectionTitle
-        eyebrow="Pipeline"
-        title="Technologický tok, který drží termíny"
-        subtitle="Standardizované kroky, automatizace a kontrolní brány. Přehled o stavu záběrů i dodávek v reálném čase."
-      />
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {[
-          { step: "01", title: "Ingest & Metadata", text: "Bezpečný import, kontrola framerate/codec, automatické rozpoznání parametrů." },
-          { step: "02", title: "Edit / Conform", text: "Proxy, EDL/XML/AAF, synchronizace zvuku a časových kódů." },
-          { step: "03", title: "VFX / Comp", text: "Shot breakdown, verzování, trackování tasků a schvalování." },
-          { step: "04", title: "Color & Finishing", text: "Color science, LUT management, exporty pro mastering." },
-          { step: "05", title: "Automatizované QC", text: "Loudness (EBU R128), gamut, titulky, safe‑area, artefakty, drop‑frames." },
-          { step: "06", title: "Delivery & Archiving", text: "Dodávky pro TV, VOD, kino, archivace s checksumy (MD5/XXH)." },
-        ].map((item, i) => (
-          <Card key={i}>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-mono text-slate-400">{item.step}</span>
-              <CheckCircle2 className="h-5 w-5 text-emerald-400/90" />
-            </div>
-            <h3 className="mt-3 text-lg font-semibold text-white">{item.title}</h3>
-            <p className="mt-1 text-sm text-slate-300">{item.text}</p>
-          </Card>
-        ))}
-      </div>
-    </Container>
-  </section>
-);
+
 
 // --- Portfolio / Showreel ---
 const Portfolio = () => (
@@ -337,6 +307,38 @@ const Portfolio = () => (
           <h3 className="mt-4 text-base font-semibold text-white">DOTS - Broken Skies</h3>
           <p className="mt-1 text-sm text-slate-300">Postprodukce, color grading videoklipu</p>
         </Card>
+      </div>
+    </Container>
+  </section>
+);
+
+// --- Pipeline ---
+const Pipeline = () => (
+  <section id="pipeline" className="">
+    <Container className="py-14">
+      <SectionTitle
+        eyebrow="Pipeline"
+        title="Technologický tok, který drží termíny"
+        subtitle="Standardizované kroky, automatizace a kontrolní brány. Přehled o stavu záběrů i dodávek v reálném čase."
+      />
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {[
+          { step: "01", title: "Ingest & Metadata", text: "Bezpečný import, kontrola framerate/codec, automatické rozpoznání parametrů." },
+          { step: "02", title: "Edit / Conform", text: "Proxy, EDL/XML/AAF, synchronizace zvuku a časových kódů." },
+          { step: "03", title: "VFX / Comp", text: "Shot breakdown, verzování, trackování tasků a schvalování." },
+          { step: "04", title: "Color & Finishing", text: "Color science, LUT management, exporty pro mastering." },
+          { step: "05", title: "Automatizované QC", text: "Loudness (EBU R128), gamut, titulky, safe‑area, artefakty, drop‑frames." },
+          { step: "06", title: "Delivery & Archiving", text: "Dodávky pro TV, VOD, kino, archivace s checksumy (MD5/XXH)." },
+        ].map((item, i) => (
+          <Card key={i}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono text-slate-400">{item.step}</span>
+              <CheckCircle2 className="h-5 w-5 text-emerald-400/90" />
+            </div>
+            <h3 className="mt-3 text-lg font-semibold text-white">{item.title}</h3>
+            <p className="mt-1 text-sm text-slate-300">{item.text}</p>
+          </Card>
+        ))}
       </div>
     </Container>
   </section>
@@ -483,8 +485,8 @@ export default function EditraLandingPage() {
         <Hero />
         <ValueProps />
         <Services />
-        <Pipeline />
         <Portfolio />
+        <Pipeline />
         <About />
         <Contact />
       </main>

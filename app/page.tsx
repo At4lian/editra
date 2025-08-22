@@ -315,9 +315,9 @@ const Portfolio = () => (
           <div className="aspect-video w-full overflow-hidden rounded-xl">
             <iframe
               className="h-full w-full"
-              src="https://www.youtube.com/watch?v=LolmAiyCg2c&t=3s"
-              title="Editra Showreel"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              src="https://www.youtube.com/embed/LolmAiyCg2c"
+              title="Case study"
+              allow="autoplay; fullscreen; picture-in-picture"
               allowFullScreen
             />
           </div>
@@ -328,7 +328,7 @@ const Portfolio = () => (
           <div className="aspect-video w-full overflow-hidden rounded-xl">
             <iframe
               className="h-full w-full"
-              src="https://www.youtube.com/watch?v=opazwv2YkPs&list=RDopazwv2YkPs&start_radio=1"
+              src="https://www.youtube.com/embed/opazwv2YkPs"
               title="Case study"
               allow="autoplay; fullscreen; picture-in-picture"
               allowFullScreen

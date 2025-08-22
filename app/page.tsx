@@ -170,20 +170,16 @@ const Hero = () => (
           transition={{ delay: 0.15, duration: 0.6 }}
           className="relative"
         >
-          <div className="relative aspect-[16/10] w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-800 to-slate-900 shadow-2xl">
-            <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(56,189,248,0.25)_0%,transparent_40%),radial-gradient(600px_300px_at_80%_120%,rgba(236,72,153,0.15),transparent_60%)]" />
-            <div className="absolute inset-0 grid grid-cols-6 grid-rows-4 opacity-20">
-              {Array.from({ length: 24 }).map((_, i) => (
-                <div key={i} className="border-r border-b border-white/10" />
-              ))}
+            <div className="relative aspect-[16/10] w-full overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-800 to-slate-900 shadow-2xl">
+            <iframe
+              className="absolute inset-0 h-full w-full"
+              src="https://www.youtube.com/embed/P-m6gLofH-Q"
+              title="YouTube video player"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
             </div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="flex items-center gap-3 rounded-2xl bg-slate-900/70 p-4 backdrop-blur">
-                <PlayCircle className="h-6 w-6 text-white" />
-                <span className="text-sm text-slate-200">Ukázkový záběr / previsualizace</span>
-              </div>
-            </div>
-          </div>
+            <p className="mt-4 text-center text-sm text-slate-400">VFX prvky pro Unexpected Visuals</p>
         </motion.div>
       </div>
     </Container>
@@ -319,27 +315,27 @@ const Portfolio = () => (
           <div className="aspect-video w-full overflow-hidden rounded-xl">
             <iframe
               className="h-full w-full"
-              src="https://www.youtube.com/embed/dQw4w9WgXcQ?rel=0"
+              src="https://www.youtube.com/watch?v=LolmAiyCg2c&t=3s"
               title="Editra Showreel"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
             />
           </div>
-          <h3 className="mt-4 text-base font-semibold text-white">Showreel 2025</h3>
-          <p className="mt-1 text-sm text-slate-300">Sestřih VFX a postprodukce napříč reklamou, hudebními klipy a social kampaněmi.</p>
+          <h3 className="mt-4 text-base font-semibold text-white">Summer City Fest Plzeň 2024</h3>
+          <p className="mt-1 text-sm text-slate-300">Postprodukce aftermovie.</p>
         </Card>
         <Card>
           <div className="aspect-video w-full overflow-hidden rounded-xl">
             <iframe
               className="h-full w-full"
-              src="https://player.vimeo.com/video/76979871?h=8272103f6e"
+              src="https://www.youtube.com/watch?v=opazwv2YkPs&list=RDopazwv2YkPs&start_radio=1"
               title="Case study"
               allow="autoplay; fullscreen; picture-in-picture"
               allowFullScreen
             />
           </div>
-          <h3 className="mt-4 text-base font-semibold text-white">Case study – TVC</h3>
-          <p className="mt-1 text-sm text-slate-300">Rozšíření scény, cleanup, compositing a finishing pod tvrdým deadlinem.</p>
+          <h3 className="mt-4 text-base font-semibold text-white">DOTS - Broken Skies</h3>
+          <p className="mt-1 text-sm text-slate-300">Postprodukce, color grading videoklipu</p>
         </Card>
       </div>
     </Container>

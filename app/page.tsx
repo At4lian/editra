@@ -22,6 +22,7 @@ import ServicesSection from "../components/ServicesSection";
 import PortfolioSection from "../components/PortfolioSection";
 import AboutSection from "../components/AboutSection";
 import ContactSection from "../components/ContactSection";
+import TestimonialsSection from "../components/TestimonialsSection";
 
 const Hero = () => (
   <section id="top" className="relative overflow-hidden">
@@ -193,6 +194,7 @@ export default function EditraLandingPage() {
         <ValueProps />
         <ServicesSection />
         <PortfolioSection />
+        <TestimonialsSection />
         <Pipeline />
         <AboutSection />
         <ContactSection />

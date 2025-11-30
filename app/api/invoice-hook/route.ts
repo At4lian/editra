@@ -339,6 +339,9 @@ async function generateInvoicePdfBuffer(args: {
 }): Promise<Buffer> {
   const { client, invoiceMeta, items } = args;
 
+  const formatCurrency = (value: number) => `${value.toFixed(2)} CZK`;
+  const formatDate = (value: Date) => value.toLocaleDateString("cs-CZ");
+
   const pdfDoc = await PDFDocument.create();
   (pdfDoc as any).registerFontkit(fontkit);
 
@@ -348,239 +351,324 @@ async function generateInvoicePdfBuffer(args: {
   const fontBytes = await getInvoiceFontBytes();
   const font = await pdfDoc.embedFont(fontBytes);
 
-  // Colors
-  const primaryColor = rgb(0.2, 0.4, 0.6);
-  const darkGray = rgb(0.2, 0.2, 0.2);
-  const lightGray = rgb(0.6, 0.6, 0.6);
-  const tableHeaderBg = rgb(0.9, 0.92, 0.95);
-
-  // Margins
-  const leftMargin = 50;
-  const rightMargin = width - 50;
-  const contentWidth = rightMargin - leftMargin;
-
-  let y = height - 50;
-
-  // Helper functions
-  const drawLine = (x1: number, y1: number, x2: number, y2: number, color = lightGray, thickness = 0.5) => {
-    page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, color, thickness });
+  const colors = {
+    primary: rgb(0.12, 0.35, 0.62),
+    accent: rgb(0.96, 0.52, 0.18),
+    text: rgb(0.14, 0.14, 0.16),
+    muted: rgb(0.42, 0.45, 0.5),
+    border: rgb(0.82, 0.85, 0.9),
+    panel: rgb(0.97, 0.98, 0.99),
+    tableHeader: rgb(0.92, 0.95, 0.98),
   };
 
-  const drawRect = (x: number, yPos: number, w: number, h: number, color: typeof primaryColor) => {
-    page.drawRectangle({ x, y: yPos, width: w, height: h, color });
-  };
+  const margin = 48;
+  const contentWidth = width - margin * 2;
 
-  // === HEADER SECTION ===
-  // Company logo area (left side)
-  drawText("EDITRA", leftMargin, y, 24, primaryColor);
-  y -= 20;
-  drawText("Video Production Studio", leftMargin, y, 10, lightGray);
+  let y = height - margin;
 
-  // Invoice title (right side)
-  const invoiceTitle = "FAKTURA";
-  page.drawText(invoiceTitle, {
-    x: rightMargin - font.widthOfTextAtSize(invoiceTitle, 28),
-    y: height - 50,
-    size: 28,
-    font,
-    color: primaryColor,
-  });
-
-  page.drawText(invoiceMeta.invoiceName, {
-    x: rightMargin - font.widthOfTextAtSize(invoiceMeta.invoiceName, 12),
-    y: height - 75,
-    size: 12,
-    font,
-    color: darkGray,
-  });
-
-  y = height - 120;
-  drawLine(leftMargin, y, rightMargin, y, primaryColor, 2);
-
-  // === INVOICE DETAILS SECTION ===
-  y -= 30;
-
-  // Left column - Supplier info
-  drawText("Dodavatel:", leftMargin, y, 9, lightGray);
-  y -= 15;
-  drawText("Editra s.r.o.", leftMargin, y, 11, darkGray);
-  y -= 14;
-  drawText("Příkladová 123", leftMargin, y, 10, darkGray);
-  y -= 13;
-  drawText("110 00 Praha 1", leftMargin, y, 10, darkGray);
-  y -= 13;
-  drawText("Česká republika", leftMargin, y, 10, darkGray);
-  y -= 16;
-  drawText("IČ: 12345678", leftMargin, y, 10, darkGray);
-  y -= 13;
-  drawText("DIČ: CZ12345678", leftMargin, y, 10, darkGray);
-
-  // Right column - Invoice dates
-  const detailsX = width / 2 + 30;
-  let detailsY = height - 150;
-
-  drawText("Číslo faktury:", detailsX, detailsY, 9, lightGray);
-  page.drawText(String(invoiceMeta.invoiceNumber), {
-    x: rightMargin - font.widthOfTextAtSize(String(invoiceMeta.invoiceNumber), 10),
-    y: detailsY,
-    size: 10,
-    font,
-    color: darkGray,
-  });
-
-  detailsY -= 18;
-  drawText("Datum vystavení:", detailsX, detailsY, 9, lightGray);
-  const issueDateStr = invoiceMeta.issueDate.toLocaleDateString("cs-CZ");
-  page.drawText(issueDateStr, {
-    x: rightMargin - font.widthOfTextAtSize(issueDateStr, 10),
-    y: detailsY,
-    size: 10,
-    font,
-    color: darkGray,
-  });
-
-  detailsY -= 18;
-  drawText("Datum splatnosti:", detailsX, detailsY, 9, lightGray);
-  const dueDateStr = invoiceMeta.dueDate.toLocaleDateString("cs-CZ");
-  page.drawText(dueDateStr, {
-    x: rightMargin - font.widthOfTextAtSize(dueDateStr, 10),
-    y: detailsY,
-    size: 10,
-    font,
-    color: primaryColor,
-  });
-
-  // === CLIENT SECTION ===
-  y -= 40;
-  drawText("Odběratel:", leftMargin, y, 9, lightGray);
-  y -= 15;
-
-  // Client box
-  const clientBoxY = y + 5;
-  drawRect(leftMargin - 5, y - 70, 220, 80, rgb(0.97, 0.97, 0.98));
-
-  drawText(cleanText(client.name), leftMargin, y, 12, darkGray);
-  y -= 16;
-  
-  const addressParts = client.address.split(", ");
-  for (const part of addressParts) {
-    drawText(cleanText(part), leftMargin, y, 10, darkGray);
-    y -= 13;
-  }
-  
-  if (client.ico) {
-    drawText(`IČ: ${cleanText(client.ico)}`, leftMargin, y, 10, darkGray);
-    y -= 13;
-  }
-  if (client.dic) {
-    drawText(`DIČ: ${cleanText(client.dic)}`, leftMargin, y, 10, darkGray);
-    y -= 13;
-  }
-
-  // === ITEMS TABLE ===
-  y -= 40;
-
-  // Table header
-  const tableTop = y;
-  const rowHeight = 25;
-  const colWidths = { name: contentWidth * 0.5, rate: contentWidth * 0.2, total: contentWidth * 0.3 };
-
-  drawRect(leftMargin, y - rowHeight + 5, contentWidth, rowHeight, tableHeaderBg);
-  
-  drawText("Popis", leftMargin + 10, y - 8, 10, darkGray);
-  drawText("Hodinová sazba", leftMargin + colWidths.name + 10, y - 8, 10, darkGray);
-  drawText("Celkem", leftMargin + colWidths.name + colWidths.rate + 10, y - 8, 10, darkGray);
-
-  y -= rowHeight;
-  drawLine(leftMargin, y + 5, rightMargin, y + 5, lightGray, 1);
-
-  // Table rows
-  for (const item of items) {
-    y -= rowHeight;
-
-    // Alternate row background
-    if (items.indexOf(item) % 2 === 1) {
-      drawRect(leftMargin, y + 5, contentWidth, rowHeight, rgb(0.98, 0.98, 0.99));
-    }
-
-    drawText(cleanText(item.name), leftMargin + 10, y + 8, 10, darkGray);
-    
-    const rateText = `${item.hourlyRate.toFixed(2)} Kč`;
-    drawText(rateText, leftMargin + colWidths.name + 10, y + 8, 10, darkGray);
-    
-    const totalText = `${item.totalPrice.toFixed(2)} Kč`;
-    page.drawText(totalText, {
-      x: rightMargin - 10 - font.widthOfTextAtSize(totalText, 10),
-      y: y + 8,
-      size: 10,
-      font,
-      color: darkGray,
-    });
-
-    drawLine(leftMargin, y + 5, rightMargin, y + 5, rgb(0.92, 0.92, 0.92), 0.5);
-  }
-
-  // === TOTALS SECTION ===
-  y -= 20;
-  drawLine(leftMargin + colWidths.name, y + 5, rightMargin, y + 5, primaryColor, 1.5);
-
-  y -= 25;
-  const totalLabel = "Celkem k úhradě:";
-  const totalValue = `${invoiceMeta.total.toFixed(2)} Kč`;
-
-  drawText(totalLabel, leftMargin + colWidths.name + 10, y, 12, darkGray);
-  page.drawText(totalValue, {
-    x: rightMargin - 10 - font.widthOfTextAtSize(totalValue, 14),
-    y: y,
-    size: 14,
-    font,
-    color: primaryColor,
-  });
-
-  // === PAYMENT DETAILS ===
-  y -= 50;
-  drawLine(leftMargin, y + 10, rightMargin, y + 10, lightGray, 0.5);
-
-  y -= 10;
-  drawText("Platební údaje:", leftMargin, y, 10, lightGray);
-  y -= 18;
-
-  const paymentDetails = [
-    { label: "Banka:", value: "Fio banka" },
-    { label: "Číslo účtu:", value: "1234567890/2010" },
-    { label: "IBAN:", value: "CZ12 2010 0000 0012 3456 7890" },
-    { label: "Variabilní symbol:", value: String(invoiceMeta.invoiceNumber) },
-  ];
-
-  for (const detail of paymentDetails) {
-    drawText(detail.label, leftMargin, y, 9, lightGray);
-    drawText(detail.value, leftMargin + 100, y, 10, darkGray);
-    y -= 14;
-  }
-
-  // === FOOTER ===
-  const footerY = 40;
-  drawLine(leftMargin, footerY + 15, rightMargin, footerY + 15, lightGray, 0.5);
-
-  const footerText = "Děkujeme za Vaši spolupráci.";
-  page.drawText(footerText, {
-    x: (width - font.widthOfTextAtSize(footerText, 9)) / 2,
-    y: footerY,
-    size: 9,
-    font,
-    color: lightGray,
-  });
-
-  // Helper function for drawing text
-  function drawText(text: string, x: number, yPos: number, size: number, color: typeof darkGray) {
-    page.drawText(cleanText(text), {
-      x,
+  const drawText = (
+    text: string,
+    x: number,
+    yPos: number,
+    size: number,
+    color: ReturnType<typeof rgb>,
+    opts: { align?: "left" | "right"; opacity?: number } = {}
+  ) => {
+    const safe = cleanText(text);
+    const textWidth = font.widthOfTextAtSize(safe, size);
+    const drawX = opts.align === "right" ? x - textWidth : x;
+    page.drawText(safe, {
+      x: drawX,
       y: yPos,
       size,
       font,
       color,
+      opacity: opts.opacity ?? 1,
     });
-  }
+    return textWidth;
+  };
+
+  const drawLine = (
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    color = colors.border,
+    thickness = 0.6
+  ) => {
+    page.drawLine({
+      start: { x: x1, y: y1 },
+      end: { x: x2, y: y2 },
+      color,
+      thickness,
+    });
+  };
+
+  const drawInfoCard = (
+    x: number,
+    yTop: number,
+    cardWidth: number,
+    cardHeight: number,
+    title: string,
+    lines: string[]
+  ) => {
+    page.drawRectangle({
+      x,
+      y: yTop - cardHeight,
+      width: cardWidth,
+      height: cardHeight,
+      color: colors.panel,
+      borderColor: colors.border,
+      borderWidth: 1,
+    });
+
+    drawText(title.toUpperCase(), x + 12, yTop - 22, 9, colors.muted);
+
+    let lineY = yTop - 40;
+    for (const line of lines) {
+      drawText(line, x + 12, lineY, 11, colors.text);
+      lineY -= 14;
+    }
+  };
+
+  const drawSummaryPill = (
+    x: number,
+    yTop: number,
+    pillWidth: number,
+    label: string,
+    value: string
+  ) => {
+    page.drawRectangle({
+      x,
+      y: yTop - 40,
+      width: pillWidth,
+      height: 40,
+      color: rgb(1, 1, 1),
+      borderColor: colors.border,
+      borderWidth: 1,
+    });
+
+    drawText(label, x + 12, yTop - 18, 9, colors.muted);
+    drawText(value, x + 12, yTop - 32, 12, colors.text);
+  };
+
+  // === HEADER ===
+  const headerHeight = 120;
+  page.drawRectangle({
+    x: 0,
+    y: height - headerHeight,
+    width,
+    height: headerHeight,
+    color: colors.primary,
+  });
+  page.drawRectangle({
+    x: width - 170,
+    y: height - headerHeight,
+    width: 170,
+    height: headerHeight,
+    color: colors.accent,
+    opacity: 0.9,
+  });
+
+  drawText("EDITRA", margin, height - 42, 26, rgb(1, 1, 1));
+  drawText("Video Production Studio", margin, height - 60, 11, rgb(1, 1, 1), {
+    opacity: 0.8,
+  });
+
+  drawText("INVOICE", width - margin, height - 38, 18, rgb(1, 1, 1), {
+    align: "right",
+  });
+  drawText(invoiceMeta.invoiceName, width - margin, height - 56, 12, rgb(1, 1, 1), {
+    align: "right",
+    opacity: 0.9,
+  });
+  drawText(formatCurrency(invoiceMeta.total), width - margin, height - 78, 16, rgb(1, 1, 1), {
+    align: "right",
+  });
+
+  y = height - headerHeight - 20;
+
+  // === SUMMARY ROW ===
+  const pillWidth = (contentWidth - 20) / 3;
+  const pillY = y;
+  drawSummaryPill(
+    margin,
+    pillY,
+    pillWidth,
+    "INVOICE NO.",
+    `#${padNumber(invoiceMeta.invoiceNumber, 3)}`
+  );
+  drawSummaryPill(
+    margin + pillWidth + 10,
+    pillY,
+    pillWidth,
+    "ISSUED",
+    formatDate(invoiceMeta.issueDate)
+  );
+  drawSummaryPill(
+    margin + (pillWidth + 10) * 2,
+    pillY,
+    pillWidth,
+    "DUE DATE",
+    formatDate(invoiceMeta.dueDate)
+  );
+
+  y = pillY - 60;
+
+  // === INFO CARDS ===
+  const cardWidth = (contentWidth - 16) / 2;
+  const cardHeight = 120;
+
+  const supplierLines = [
+    "Editra s.r.o.",
+    "Petrikladova 123",
+    "110 00 Praha 1",
+    "Czech Republic",
+    "ICO: 12345678",
+    "DIC: CZ12345678",
+  ];
+
+  const clientLines = [
+    cleanText(client.name),
+    ...cleanText(client.address)
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean),
+    client.ico ? `ICO: ${cleanText(client.ico)}` : "",
+    client.dic ? `DIC: ${cleanText(client.dic)}` : "",
+  ].filter(Boolean);
+
+  drawInfoCard(margin, y, cardWidth, cardHeight, "Supplier", supplierLines);
+  drawInfoCard(
+    margin + cardWidth + 16,
+    y,
+    cardWidth,
+    cardHeight,
+    "Client",
+    clientLines
+  );
+
+  y -= cardHeight + 30;
+
+  // === ITEMS TABLE ===
+  drawText("Work Summary", margin, y, 12, colors.text);
+  y -= 14;
+  drawLine(margin, y, width - margin, y, colors.border, 1);
+  y -= 12;
+
+  const colNameWidth = contentWidth * 0.52;
+  const colRateWidth = contentWidth * 0.18;
+  const colTotalWidth = contentWidth - colNameWidth - colRateWidth;
+  const rowHeight = 26;
+
+  // Header
+  page.drawRectangle({
+    x: margin,
+    y: y - rowHeight,
+    width: contentWidth,
+    height: rowHeight,
+    color: colors.tableHeader,
+  });
+  drawText("Description", margin + 10, y - 16, 10, colors.muted);
+  drawText("Hourly Rate", margin + colNameWidth + 10, y - 16, 10, colors.muted);
+  drawText(
+    "Amount",
+    margin + colNameWidth + colRateWidth + colTotalWidth - 10,
+    y - 16,
+    10,
+    colors.muted,
+    { align: "right" }
+  );
+
+  y -= rowHeight + 6;
+
+  items.forEach((item, idx) => {
+    const rowY = y - idx * rowHeight;
+    if (idx % 2 === 1) {
+      page.drawRectangle({
+        x: margin,
+        y: rowY - rowHeight + 4,
+        width: contentWidth,
+        height: rowHeight,
+        color: rgb(0.985, 0.99, 0.995),
+      });
+    }
+
+    drawText(cleanText(item.name), margin + 10, rowY - 16, 10, colors.text);
+    drawText(formatCurrency(item.hourlyRate), margin + colNameWidth + 10, rowY - 16, 10, colors.text);
+    drawText(
+      formatCurrency(item.totalPrice),
+      margin + colNameWidth + colRateWidth + colTotalWidth - 10,
+      rowY - 16,
+      10,
+      colors.text,
+      { align: "right" }
+    );
+  });
+
+  y -= rowHeight * items.length + 20;
+
+  // === TOTALS ===
+  const totalBoxWidth = 220;
+  const totalBoxHeight = 80;
+  const totalBoxX = margin + contentWidth - totalBoxWidth;
+  const totalBoxY = y;
+
+  page.drawRectangle({
+    x: totalBoxX,
+    y: totalBoxY - totalBoxHeight,
+    width: totalBoxWidth,
+    height: totalBoxHeight,
+    color: colors.panel,
+    borderColor: colors.border,
+    borderWidth: 1.2,
+  });
+
+  drawText("AMOUNT DUE", totalBoxX + 14, totalBoxY - 20, 10, colors.muted);
+  drawText(
+    formatCurrency(invoiceMeta.total),
+    totalBoxX + totalBoxWidth - 14,
+    totalBoxY - 38,
+    18,
+    colors.primary,
+    { align: "right" }
+  );
+  drawText(
+    `Due: ${formatDate(invoiceMeta.dueDate)}`,
+    totalBoxX + totalBoxWidth - 14,
+    totalBoxY - 58,
+    10,
+    colors.muted,
+    { align: "right" }
+  );
+
+  y = totalBoxY - totalBoxHeight - 32;
+
+  // === PAYMENT DETAILS ===
+  drawText("Payment Details", margin, y, 12, colors.text);
+  y -= 12;
+  drawLine(margin, y, width - margin, y, colors.border, 1);
+  y -= 14;
+
+  const paymentDetails = [
+    { label: "Bank", value: "Fio banka" },
+    { label: "Account Number", value: "1234567890/2010" },
+    { label: "IBAN", value: "CZ12 2010 0000 0012 3456 7890" },
+    { label: "Variable Symbol", value: String(invoiceMeta.invoiceNumber) },
+  ];
+
+  paymentDetails.forEach((detail) => {
+    drawText(detail.label, margin, y, 10, colors.muted);
+    drawText(detail.value, margin + 120, y, 11, colors.text);
+    y -= 16;
+  });
+
+  // === FOOTER ===
+  const footerY = 46;
+  drawLine(margin, footerY + 12, width - margin, footerY + 12, colors.border, 0.8);
+  const footerText = "Thank you for your business";
+  const footerWidth = font.widthOfTextAtSize(footerText, 10);
+  drawText(footerText, (width - footerWidth) / 2, footerY, 10, colors.muted);
 
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);

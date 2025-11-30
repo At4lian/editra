@@ -26,6 +26,7 @@ type ClickUpTask = {
   url?: string;
   status?: ClickUpStatus;
   custom_fields?: ClickUpCustomField[];
+  // budeme používat i date_created / date_updated přes "as any"
 };
 
 function getEnvOrThrow(name: string): string {
@@ -58,6 +59,8 @@ function getClientName(field: ClickUpCustomField | undefined): string | undefine
   return undefined;
 }
 
+
+// !!! DŮLEŽITÉ: ClickUp pro custom field používá POST, ne PUT
 async function updateCustomField(
   taskId: string,
   fieldId: string,
@@ -67,7 +70,7 @@ async function updateCustomField(
   const resp = await fetch(
     `https://api.clickup.com/api/v2/task/${taskId}/field/${fieldId}`,
     {
-      method: 'PUT',
+      method: 'POST', // OPRAVENO z PUT na POST
       headers: {
         'Content-Type': 'application/json',
         Authorization: token,
@@ -175,6 +178,40 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'No tasks to invoice' }, { status: 200 });
     }
 
+    // 4.5) PRIMARY TRIGGER – aby se faktura negenerovala 2×,
+    //      necháme fakturaci udělat jen webhook toho tasku,
+    //      který je "hlavní". Vezmeme nejnověji updatovaný task.
+    if (!triggerTaskId) {
+      console.warn('Chybí triggerTaskId, ale kandidáti existují – nic nedělám.');
+      return NextResponse.json(
+        { ok: false, error: 'Missing trigger task id' },
+        { status: 400 },
+      );
+    }
+
+    const sortedForTrigger = [...candidateTasks].sort((a, b) => {
+      const da = Number((a as any).date_updated ?? (a as any).date_created ?? 0);
+      const db = Number((b as any).date_updated ?? (b as any).date_created ?? 0);
+      return da - db;
+    });
+
+    const primaryTaskId = sortedForTrigger[sortedForTrigger.length - 1].id;
+
+    if (triggerTaskId !== primaryTaskId) {
+      console.log(
+        'Přeskakuju fakturaci v tomhle webhooku, hlavní trigger je',
+        primaryTaskId,
+        'aktuální je',
+        triggerTaskId,
+      );
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: 'not primary trigger',
+        primaryTaskId,
+      });
+    }
+
     // 5) Zkontrolujeme klienty – musí být jen jeden
     const clientKeys = new Set<string>();
     const clientNames = new Map<string, string>();
@@ -280,12 +317,15 @@ export async function POST(req: NextRequest) {
       0,
     );
 
-    console.log('Invoice items:', items.map((i) => ({
-      taskId: i.taskId,
-      name: i.name,
-      hourlyRate: i.hourlyRate,
-      totalPrice: i.totalPrice,
-    })));
+    console.log(
+      'Invoice items:',
+      items.map((i) => ({
+        taskId: i.taskId,
+        name: i.name,
+        hourlyRate: i.hourlyRate,
+        totalPrice: i.totalPrice,
+      })),
+    );
 
     // 7) Číslo faktury – jednoduchý fallback podle data a klienta
     const now = new Date();

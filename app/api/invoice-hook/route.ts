@@ -139,11 +139,9 @@ async function clickUpFetch(path: string, init?: RequestInit) {
   return res.json();
 }
 
+// 🔧 TADY JE OPRAVA – žádné custom_fields=true
 async function getTasksInList(listId: string): Promise<ClickUpTask[]> {
-  // custom_fields=true, ať tam vždycky jsou
-  const data = await clickUpFetch(
-    `/list/${listId}/task?archived=false&custom_fields=true`
-  );
+  const data = await clickUpFetch(`/list/${listId}/task?archived=false`);
   return (data.tasks ?? []) as ClickUpTask[];
 }
 
@@ -352,7 +350,6 @@ export async function POST(req: NextRequest) {
       sharedClientOptionId
     );
 
-    // Všichni kandidáti mají stejného klienta → použijeme je všechny
     const candidates = allCandidates;
 
     // 4) Hlavní trigger – aby se faktura negenerovala víckrát

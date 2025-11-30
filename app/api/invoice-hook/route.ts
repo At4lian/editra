@@ -340,72 +340,247 @@ async function generateInvoicePdfBuffer(args: {
   const { client, invoiceMeta, items } = args;
 
   const pdfDoc = await PDFDocument.create();
-  // >>> TADY registrujeme fontkit, to ti chybělo <<<
   (pdfDoc as any).registerFontkit(fontkit);
 
-  const page = pdfDoc.addPage();
-  const { width } = page.getSize();
+  const page = pdfDoc.addPage([595, 842]); // A4 size
+  const { width, height } = page.getSize();
 
   const fontBytes = await getInvoiceFontBytes();
   const font = await pdfDoc.embedFont(fontBytes);
 
-  let y = 800;
+  // Colors
+  const primaryColor = rgb(0.2, 0.4, 0.6);
+  const darkGray = rgb(0.2, 0.2, 0.2);
+  const lightGray = rgb(0.6, 0.6, 0.6);
+  const tableHeaderBg = rgb(0.9, 0.92, 0.95);
 
-  const drawText = (
-    text: string,
-    options: { x?: number; y?: number; size?: number } = {}
-  ) => {
-    const size = options.size ?? 10;
-    const x = options.x ?? 50;
-    const yy = options.y ?? y;
+  // Margins
+  const leftMargin = 50;
+  const rightMargin = width - 50;
+  const contentWidth = rightMargin - leftMargin;
 
-    const txt = cleanText(text);
+  let y = height - 50;
 
-    page.drawText(txt, {
-      x,
-      y: yy,
-      size,
-      font,
-      color: rgb(0, 0, 0),
-    });
-    y = yy - size - 4;
+  // Helper functions
+  const drawLine = (x1: number, y1: number, x2: number, y2: number, color = lightGray, thickness = 0.5) => {
+    page.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, color, thickness });
   };
 
-  // Header
-  drawText(`Invoice ${invoiceMeta.invoiceName}`, {
-    x: width - 250,
-    y,
-    size: 18,
+  const drawRect = (x: number, yPos: number, w: number, h: number, color: typeof primaryColor) => {
+    page.drawRectangle({ x, y: yPos, width: w, height: h, color });
+  };
+
+  // === HEADER SECTION ===
+  // Company logo area (left side)
+  drawText("EDITRA", leftMargin, y, 24, primaryColor);
+  y -= 20;
+  drawText("Video Production Studio", leftMargin, y, 10, lightGray);
+
+  // Invoice title (right side)
+  const invoiceTitle = "FAKTURA";
+  page.drawText(invoiceTitle, {
+    x: rightMargin - font.widthOfTextAtSize(invoiceTitle, 28),
+    y: height - 50,
+    size: 28,
+    font,
+    color: primaryColor,
   });
-  drawText(`Invoice number: ${invoiceMeta.invoiceNumber}`);
-  drawText(
-    `Issue date: ${invoiceMeta.issueDate.toLocaleDateString("cs-CZ")}`
-  );
-  drawText(`Due date: ${invoiceMeta.dueDate.toLocaleDateString("cs-CZ")}`);
-  y -= 10;
 
-  // Client
-  drawText("Bill To:", { size: 12 });
-  drawText(client.name);
-  drawText(client.address);
-  if (client.ico) drawText(`IČ: ${client.ico}`);
-  if (client.dic) drawText(`DIČ: ${client.dic}`);
-  y -= 10;
+  page.drawText(invoiceMeta.invoiceName, {
+    x: rightMargin - font.widthOfTextAtSize(invoiceMeta.invoiceName, 12),
+    y: height - 75,
+    size: 12,
+    font,
+    color: darkGray,
+  });
 
-  // Items
-  drawText("Items:", { size: 12 });
-  for (const item of items) {
-    drawText(item.name, { size: 11 });
-    drawText(`Hourly rate: ${item.hourlyRate.toFixed(2)} Kč`, { x: 60 });
-    drawText(`Total: ${item.totalPrice.toFixed(2)} Kč`, { x: 60 });
-    y -= 4;
+  y = height - 120;
+  drawLine(leftMargin, y, rightMargin, y, primaryColor, 2);
+
+  // === INVOICE DETAILS SECTION ===
+  y -= 30;
+
+  // Left column - Supplier info
+  drawText("Dodavatel:", leftMargin, y, 9, lightGray);
+  y -= 15;
+  drawText("Editra s.r.o.", leftMargin, y, 11, darkGray);
+  y -= 14;
+  drawText("Příkladová 123", leftMargin, y, 10, darkGray);
+  y -= 13;
+  drawText("110 00 Praha 1", leftMargin, y, 10, darkGray);
+  y -= 13;
+  drawText("Česká republika", leftMargin, y, 10, darkGray);
+  y -= 16;
+  drawText("IČ: 12345678", leftMargin, y, 10, darkGray);
+  y -= 13;
+  drawText("DIČ: CZ12345678", leftMargin, y, 10, darkGray);
+
+  // Right column - Invoice dates
+  const detailsX = width / 2 + 30;
+  let detailsY = height - 150;
+
+  drawText("Číslo faktury:", detailsX, detailsY, 9, lightGray);
+  page.drawText(String(invoiceMeta.invoiceNumber), {
+    x: rightMargin - font.widthOfTextAtSize(String(invoiceMeta.invoiceNumber), 10),
+    y: detailsY,
+    size: 10,
+    font,
+    color: darkGray,
+  });
+
+  detailsY -= 18;
+  drawText("Datum vystavení:", detailsX, detailsY, 9, lightGray);
+  const issueDateStr = invoiceMeta.issueDate.toLocaleDateString("cs-CZ");
+  page.drawText(issueDateStr, {
+    x: rightMargin - font.widthOfTextAtSize(issueDateStr, 10),
+    y: detailsY,
+    size: 10,
+    font,
+    color: darkGray,
+  });
+
+  detailsY -= 18;
+  drawText("Datum splatnosti:", detailsX, detailsY, 9, lightGray);
+  const dueDateStr = invoiceMeta.dueDate.toLocaleDateString("cs-CZ");
+  page.drawText(dueDateStr, {
+    x: rightMargin - font.widthOfTextAtSize(dueDateStr, 10),
+    y: detailsY,
+    size: 10,
+    font,
+    color: primaryColor,
+  });
+
+  // === CLIENT SECTION ===
+  y -= 40;
+  drawText("Odběratel:", leftMargin, y, 9, lightGray);
+  y -= 15;
+
+  // Client box
+  const clientBoxY = y + 5;
+  drawRect(leftMargin - 5, y - 70, 220, 80, rgb(0.97, 0.97, 0.98));
+
+  drawText(cleanText(client.name), leftMargin, y, 12, darkGray);
+  y -= 16;
+  
+  const addressParts = client.address.split(", ");
+  for (const part of addressParts) {
+    drawText(cleanText(part), leftMargin, y, 10, darkGray);
+    y -= 13;
+  }
+  
+  if (client.ico) {
+    drawText(`IČ: ${cleanText(client.ico)}`, leftMargin, y, 10, darkGray);
+    y -= 13;
+  }
+  if (client.dic) {
+    drawText(`DIČ: ${cleanText(client.dic)}`, leftMargin, y, 10, darkGray);
+    y -= 13;
   }
 
-  y -= 10;
-  drawText(`Total: ${invoiceMeta.total.toFixed(2)} Kč`, {
-    x: width - 200,
-    size: 12,
+  // === ITEMS TABLE ===
+  y -= 40;
+
+  // Table header
+  const tableTop = y;
+  const rowHeight = 25;
+  const colWidths = { name: contentWidth * 0.5, rate: contentWidth * 0.2, total: contentWidth * 0.3 };
+
+  drawRect(leftMargin, y - rowHeight + 5, contentWidth, rowHeight, tableHeaderBg);
+  
+  drawText("Popis", leftMargin + 10, y - 8, 10, darkGray);
+  drawText("Hodinová sazba", leftMargin + colWidths.name + 10, y - 8, 10, darkGray);
+  drawText("Celkem", leftMargin + colWidths.name + colWidths.rate + 10, y - 8, 10, darkGray);
+
+  y -= rowHeight;
+  drawLine(leftMargin, y + 5, rightMargin, y + 5, lightGray, 1);
+
+  // Table rows
+  for (const item of items) {
+    y -= rowHeight;
+
+    // Alternate row background
+    if (items.indexOf(item) % 2 === 1) {
+      drawRect(leftMargin, y + 5, contentWidth, rowHeight, rgb(0.98, 0.98, 0.99));
+    }
+
+    drawText(cleanText(item.name), leftMargin + 10, y + 8, 10, darkGray);
+    
+    const rateText = `${item.hourlyRate.toFixed(2)} Kč`;
+    drawText(rateText, leftMargin + colWidths.name + 10, y + 8, 10, darkGray);
+    
+    const totalText = `${item.totalPrice.toFixed(2)} Kč`;
+    page.drawText(totalText, {
+      x: rightMargin - 10 - font.widthOfTextAtSize(totalText, 10),
+      y: y + 8,
+      size: 10,
+      font,
+      color: darkGray,
+    });
+
+    drawLine(leftMargin, y + 5, rightMargin, y + 5, rgb(0.92, 0.92, 0.92), 0.5);
+  }
+
+  // === TOTALS SECTION ===
+  y -= 20;
+  drawLine(leftMargin + colWidths.name, y + 5, rightMargin, y + 5, primaryColor, 1.5);
+
+  y -= 25;
+  const totalLabel = "Celkem k úhradě:";
+  const totalValue = `${invoiceMeta.total.toFixed(2)} Kč`;
+
+  drawText(totalLabel, leftMargin + colWidths.name + 10, y, 12, darkGray);
+  page.drawText(totalValue, {
+    x: rightMargin - 10 - font.widthOfTextAtSize(totalValue, 14),
+    y: y,
+    size: 14,
+    font,
+    color: primaryColor,
   });
+
+  // === PAYMENT DETAILS ===
+  y -= 50;
+  drawLine(leftMargin, y + 10, rightMargin, y + 10, lightGray, 0.5);
+
+  y -= 10;
+  drawText("Platební údaje:", leftMargin, y, 10, lightGray);
+  y -= 18;
+
+  const paymentDetails = [
+    { label: "Banka:", value: "Fio banka" },
+    { label: "Číslo účtu:", value: "1234567890/2010" },
+    { label: "IBAN:", value: "CZ12 2010 0000 0012 3456 7890" },
+    { label: "Variabilní symbol:", value: String(invoiceMeta.invoiceNumber) },
+  ];
+
+  for (const detail of paymentDetails) {
+    drawText(detail.label, leftMargin, y, 9, lightGray);
+    drawText(detail.value, leftMargin + 100, y, 10, darkGray);
+    y -= 14;
+  }
+
+  // === FOOTER ===
+  const footerY = 40;
+  drawLine(leftMargin, footerY + 15, rightMargin, footerY + 15, lightGray, 0.5);
+
+  const footerText = "Děkujeme za Vaši spolupráci.";
+  page.drawText(footerText, {
+    x: (width - font.widthOfTextAtSize(footerText, 9)) / 2,
+    y: footerY,
+    size: 9,
+    font,
+    color: lightGray,
+  });
+
+  // Helper function for drawing text
+  function drawText(text: string, x: number, yPos: number, size: number, color: typeof darkGray) {
+    page.drawText(cleanText(text), {
+      x,
+      y: yPos,
+      size,
+      font,
+      color,
+    });
+  }
 
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);

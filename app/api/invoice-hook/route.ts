@@ -2,93 +2,111 @@
 // app/api/clickup-webhook/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
-// ====== CONFIG – DOPLŇ SI VLASTNÍ HODNOTY ======
+// ============ CONFIG ============
 
-// ClickUp API
+// ClickUp
 const CLICKUP_API_TOKEN = process.env.CLICKUP_API_TOKEN!;
 const CLICKUP_API_BASE = "https://api.clickup.com/api/v2";
 
-// List IDs – doplň si svoje
-const PROJECTS_LIST_ID = process.env.CLICKUP_PROJECTS_LIST_ID!; // list s položkami k fakturaci (tam chodí webhook)
-const CLIENTS_LIST_ID = process.env.CLICKUP_CLIENTS_LIST_ID!;   // list "Clients"
-const INVOICES_LIST_ID = process.env.CLICKUP_INVOICES_LIST_ID!; // list "Invoices"
+// List IDs (Video Production space)
+const PROJECTS_LIST_ID = "901518258148";
+const CLIENTS_LIST_ID = "901518279818";
+const INVOICES_LIST_ID = "901518279874";
 
-// Custom field IDs v PROJECTS listu
-const CF_TOTAL_PRICE_ID = "4f368785-f1ac-490e-9131-581c56e110a0"; // Number – totalPrice
-const CF_HOURLY_RATE_ID = "7ed74ee6-bacf-4526-aaa9-1580c689712b"; // Number – hourlyRate
-const CF_READY_TO_INVOICE_ID = "c1aefd2b-2894-4e45-9edf-0e484a85bc86"; // Bool – ReadyToInvoice
-const CF_PROJECT_CLIENT_NAME_ID = "586f7811-79a0-40a6-ad55-324b98a53824"; // Dropdown/Text – jméno klienta v Projects
-const CF_PROJECT_INVOICE_NUMBER_ID = process.env
-  .CLICKUP_CF_PROJECT_INVOICE_NUMBER_ID!; // Text/Number field v Projects pro číslo faktury
+// --- Custom fields: PROJECTS ("Projects" list) ---
 
-// Custom field IDs v CLIENTS listu
-const CF_CLIENT_SHORT_CODE_ID = process.env
-  .CLICKUP_CF_CLIENT_SHORT_CODE_ID!; // např. "JK" – kratší kód klienta
-const CF_CLIENT_STREET_ID = process.env.CLICKUP_CF_CLIENT_STREET_ID!;
-const CF_CLIENT_CITY_ID = process.env.CLICKUP_CF_CLIENT_CITY_ID!;
-const CF_CLIENT_ZIP_ID = process.env.CLICKUP_CF_CLIENT_ZIP_ID!;
-const CF_CLIENT_COUNTRY_ID = process.env.CLICKUP_CF_CLIENT_COUNTRY_ID!;
-const CF_CLIENT_ICO_ID = process.env.CLICKUP_CF_CLIENT_ICO_ID!;
-const CF_CLIENT_DIC_ID = process.env.CLICKUP_CF_CLIENT_DIC_ID!;
-const CF_CLIENT_EMAIL_ID = process.env.CLICKUP_CF_CLIENT_EMAIL_ID!;
-const CF_CLIENT_DEFAULT_DUE_DAYS_ID = process.env
-  .CLICKUP_CF_CLIENT_DEFAULT_DUE_DAYS_ID!;
+// Total Price (formula)
+const CF_TOTAL_PRICE_ID = "4f368785-f1ac-490e-9131-581c56e110a0";
+// Client (drop_down)
+const CF_PROJECT_CLIENT_NAME_ID = "586f7811-79a0-40a6-ad55-324b98a53824";
+// Hourly Rate (currency)
+const CF_HOURLY_RATE_ID = "7ed74ee6-bacf-4526-aaa9-1580c689712b";
+// Invoice Number (short_text) – sem budeme zapisovat číslo faktury (např. "5")
+const CF_PROJECT_INVOICE_NUMBER_ID = "82a5d55e-dadc-4978-bb1c-6d7b3c837acd";
+// Invoiced (checkbox) – používáme jako "ReadyToInvoice"
+const CF_READY_TO_INVOICE_ID = "c1aefd2b-2894-4e45-9edf-0e484a85bc86";
+// Paid (checkbox) – můžeš použít později
+const CF_PROJECT_PAID_ID = "cfd3baf0-35b2-4f2b-8d75-f7e0341dc322";
 
-// Custom field IDs v INVOICES listu
-const CF_INVOICE_NUMBER_ID = process.env.CLICKUP_CF_INVOICE_NUMBER_ID!; // Number / Text
-const CF_INVOICE_CLIENT_NAME_ID = process.env
-  .CLICKUP_CF_INVOICE_CLIENT_NAME_ID!;
-const CF_INVOICE_TOTAL_ID = process.env.CLICKUP_CF_INVOICE_TOTAL_ID!;
-const CF_INVOICE_ISSUE_DATE_ID = process.env.CLICKUP_CF_INVOICE_ISSUE_DATE_ID!;
-const CF_INVOICE_DUE_DATE_ID = process.env.CLICKUP_CF_INVOICE_DUE_DATE_ID!;
-const CF_INVOICE_PAID_ID = process.env.CLICKUP_CF_INVOICE_PAID_ID!;
-const CF_INVOICE_PDF_LINK_ID = process.env.CLICKUP_CF_INVOICE_PDF_LINK_ID!;
+// --- Custom fields: CLIENTS ("Clients" list) ---
 
-// Resend / email
-const RESEND_API_KEY = process.env.RESEND_API_KEY!;
-const INVOICE_SENDER = process.env.INVOICE_SENDER_EMAIL!; // např. "faktury@tvoje-domena.cz"
-const INVOICE_BCC = process.env.INVOICE_BCC_EMAIL || "";  // třeba tvůj vlastní mail
+const CF_CLIENT_CITY_ID = "05cf75ed-65a2-45db-aeda-a689bc5470bb"; // City
+const CF_CLIENT_DEFAULT_DUE_DAYS_ID = "108f4b6c-95ac-49a2-b2df-b5a6ee18fddd"; // Dafult due days
+const CF_CLIENT_COUNTRY_ID = "11757f3e-55dc-451b-b571-dcea25a27160"; // Country
+const CF_CLIENT_EMAIL_ID = "1a73a54e-969e-4de5-80e3-c5ca081a52c9"; // Email
+const CF_CLIENT_DIC_ID = "8c6e2257-37d2-46fc-b5f4-347a6e4e8c7c"; // DIČ
+const CF_CLIENT_STREET_ID = "8d338e58-d810-499d-9b73-f920cfceb9ed"; // Street
+const CF_CLIENT_ZIP_ID = "ad5270c3-b0cd-487f-9430-80d898067a2f"; // ZIP
+const CF_CLIENT_ICO_ID = "ca5af7da-40cb-4f34-9902-1f88bb360e5d"; // IČ
+const CF_CLIENT_SHORT_CODE_ID = "fc6f7b03-7a31-4c04-ae7d-b5a0c0653f49"; // Short code (JK apod.)
 
-// ====== TYPY ======
+// --- Custom fields: INVOICES ("Invoices" list) ---
+
+const CF_INVOICE_TOTAL_ID = "2f695604-81dc-4cf3-a279-b5ab0a81f35f"; // Total (currency)
+const CF_INVOICE_DUE_DATE_ID = "4cb58b5f-4f97-4aca-8169-2ee0e1c91e91"; // Due Date (date)
+const CF_INVOICE_CLIENT_NAME_ID = "7d9683e2-9305-456c-8f4d-0ed4fe181b00"; // Client (short_text)
+const CF_INVOICE_NUMBER_ID = "82a5d55e-dadc-4978-bb1c-6d7b3c837acd"; // Invoice Number (short_text)
+const CF_INVOICE_ISSUE_DATE_ID = "872b7d98-e277-43ac-87e1-f5048fb4ad9c"; // Issue Date (date)
+const CF_INVOICE_PDF_LINK_ID = "97a94428-dd1e-4c4b-b176-76b99de1c877"; // PDF Link (url)
+const CF_INVOICE_INVOICED_ID = "c1aefd2b-2894-4e45-9edf-0e484a85bc86"; // Invoiced (checkbox)
+const CF_INVOICE_PAID_ID = "cfd3baf0-35b2-4f2b-8d75-f7e0341dc322"; // Paid (checkbox)
+
+// Resend / mail (doplníš si)
+const RESEND_API_KEY = process.env.RESEND_API_KEY ?? "";
+const INVOICE_SENDER = process.env.INVOICE_SENDER_EMAIL ?? "";
+const INVOICE_BCC = process.env.INVOICE_BCC_EMAIL ?? "";
+
+// ============ TYPY ============
+
+type WebhookField = {
+  field_id: string;
+  value: any;
+};
 
 type ClickUpWebhookBody = {
   payload: {
     id: string;
+    name: string;
     subcategory?: string; // list_id
     lists?: { list_id: string; type: string }[];
-    name: string;
-    fields?: {
-      field_id: string;
-      value: any;
-    }[];
+    fields?: WebhookField[];
   };
+};
+
+type ClickUpCustomField = {
+  id: string;
+  value: any;
 };
 
 type ClickUpTask = {
   id: string;
   name: string;
-  custom_fields?: {
-    id: string;
-    value: any;
-  }[];
+  custom_fields?: ClickUpCustomField[];
 };
 
-// ====== HELPERY ======
+type ClientRecord = {
+  taskId: string;
+  name: string;
+  shortCode: string;
+  street: string;
+  city: string;
+  zip: string;
+  country: string;
+  ico: string;
+  dic: string;
+  email: string;
+  defaultDueDays: number;
+};
 
-function getFieldValueFromWebhook(
-  body: ClickUpWebhookBody,
-  fieldId: string
-): any | undefined {
-  return body.payload.fields?.find((f) => f.field_id === fieldId)?.value;
-}
+type InvoiceItem = {
+  taskId: string;
+  name: string;
+  hourlyRate: number;
+  totalPrice: number;
+};
 
-function getFieldValueFromTask(task: ClickUpTask, fieldId: string): any {
-  return (
-    task.custom_fields?.find((f) => f.id === fieldId)?.value ?? undefined
-  );
-}
+// ============ HELPERY ============
 
-// Čisté zaokrouhlení na 2 desetinná místa
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -97,7 +115,16 @@ function padNumber(n: number, digits: number): string {
   return n.toString().padStart(digits, "0");
 }
 
-// ====== CLICKUP API CALLS ======
+function getFieldValueFromTask(task: ClickUpTask, fieldId: string): any {
+  return task.custom_fields?.find((f) => f.id === fieldId)?.value ?? undefined;
+}
+
+function getFieldValueFromWebhook(
+  body: ClickUpWebhookBody,
+  fieldId: string
+): any | undefined {
+  return body.payload.fields?.find((f) => f.field_id === fieldId)?.value;
+}
 
 async function clickUpFetch(path: string, init?: RequestInit) {
   const url = `${CLICKUP_API_BASE}${path}`;
@@ -108,6 +135,7 @@ async function clickUpFetch(path: string, init?: RequestInit) {
       Authorization: CLICKUP_API_TOKEN,
       ...(init?.headers || {}),
     },
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -121,7 +149,7 @@ async function clickUpFetch(path: string, init?: RequestInit) {
 
 async function getTasksInList(listId: string): Promise<ClickUpTask[]> {
   const data = await clickUpFetch(`/list/${listId}/task?archived=false`);
-  return data.tasks as ClickUpTask[];
+  return (data.tasks ?? []) as ClickUpTask[];
 }
 
 async function updateTask(taskId: string, body: any) {
@@ -139,31 +167,29 @@ async function createInvoiceTask(payload: {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  return { id: data.id };
+  return { id: data.id as string };
 }
 
-// ====== DOMÉNOVÁ LOGIKA ======
+// map dropdown optionId -> label ("Jakub Nitran")
+async function getClientDropdownOptions(): Promise<Map<string, string>> {
+  const data = await clickUpFetch(`/list/${PROJECTS_LIST_ID}/field`);
+  const field = (data.fields ?? []).find(
+    (f: any) => f.id === CF_PROJECT_CLIENT_NAME_ID
+  );
+  if (!field || !field.type_config || !field.type_config.options) {
+    throw new Error("Client dropdown field has no options config");
+  }
 
-// 1) Najdi další číslo faktury (max+1)
-async function getNextInvoiceNumber(): Promise<number> {
-  const tasks = await getTasksInList(INVOICES_LIST_ID);
-
-  const numbers = tasks
-    .map((t) => getFieldValueFromTask(t, CF_INVOICE_NUMBER_ID))
-    .filter((v) => v !== undefined && v !== null)
-    .map((v) => Number(v))
-    .filter((n) => !Number.isNaN(n));
-
-  if (numbers.length === 0) return 1;
-
-  const max = Math.max(...numbers);
-  return max + 1;
+  const map = new Map<string, string>();
+  for (const opt of field.type_config.options as any[]) {
+    map.set(opt.id, opt.name);
+  }
+  return map;
 }
 
-// 2) Najdi klienta podle jména (Clients list)
-async function findClientByName(clientName: string) {
+// najdi klienta podle jména (task.name v "Clients" listu)
+async function findClientByName(clientName: string): Promise<ClientRecord | null> {
   const tasks = await getTasksInList(CLIENTS_LIST_ID);
-
   const clientTask = tasks.find((t) => t.name === clientName);
   if (!clientTask) return null;
 
@@ -185,37 +211,24 @@ async function findClientByName(clientName: string) {
   };
 }
 
-// 3) Pošli fakturu mailem (Resend) – jen skeleton, logiku emailu si už máš
-async function sendInvoiceEmail(args: {
-  client: ReturnType<typeof buildClientPayload>;
-  invoiceMeta: {
-    invoiceName: string;
-    invoiceNumber: number;
-    total: number;
-    issueDate: Date;
-    dueDate: Date;
-  };
-  items: {
-    name: string;
-    hourlyRate: number;
-    totalPrice: number;
-  }[];
-}): Promise<{ pdfUrl?: string }> {
-  // Sem si dej svojí logiku (tvorba PDF, Resend, apod.)
-  // Tady jen placeholder, který loguje:
-  console.info("[Invoice] Sending email", {
-    to: args.client.email,
-    invoice: args.invoiceMeta.invoiceName,
-    total: args.invoiceMeta.total,
-  });
+// další číslo faktury = max(CF_INVOICE_NUMBER_ID) + 1
+async function getNextInvoiceNumber(): Promise<number> {
+  const tasks = await getTasksInList(INVOICES_LIST_ID);
 
-  // TODO: tady vytvoř PDF, nahraj někam a vrať url
-  const fakeUrl = "https://example.com/faktura.pdf";
-  return { pdfUrl: fakeUrl };
+  const numbers = tasks
+    .map((t) => getFieldValueFromTask(t, CF_INVOICE_NUMBER_ID))
+    .filter((v) => v !== undefined && v !== null)
+    .map((v) => Number(v))
+    .filter((n) => !Number.isNaN(n));
+
+  if (numbers.length === 0) return 1;
+
+  const max = Math.max(...numbers);
+  return max + 1;
 }
 
-// helper na payload klienta pro email
-function buildClientPayload(client: NonNullable<Awaited<ReturnType<typeof findClientByName>>>) {
+// klient payload pro email
+function buildClientPayload(client: ClientRecord) {
   return {
     name: client.name,
     email: client.email,
@@ -225,10 +238,44 @@ function buildClientPayload(client: NonNullable<Awaited<ReturnType<typeof findCl
   };
 }
 
-// ====== ROUTE HANDLER ======
+// ============ EMAIL / RESEND (STUB) ============
+
+async function sendInvoiceEmail(args: {
+  client: ReturnType<typeof buildClientPayload>;
+  invoiceMeta: {
+    invoiceName: string;
+    invoiceNumber: number;
+    total: number;
+    issueDate: Date;
+    dueDate: Date;
+  };
+  items: InvoiceItem[];
+}): Promise<{ pdfUrl?: string }> {
+  // TADY si doplň svoji existující logiku (Resend, PDF, atd.)
+  console.info("[Invoice] Sending email (stub)", {
+    to: args.client.email,
+    invoice: args.invoiceMeta.invoiceName,
+    total: args.invoiceMeta.total,
+    items: args.items.length,
+  });
+
+  // zatím jen vrátíme fake URL, ať se to má kam zapsat
+  const fakeUrl = "https://example.com/faktura.pdf";
+  return { pdfUrl: fakeUrl };
+}
+
+// ============ ROUTE HANDLER ============
 
 export async function POST(req: NextRequest) {
   try {
+    if (!CLICKUP_API_TOKEN) {
+      console.error("Missing CLICKUP_API_TOKEN");
+      return NextResponse.json(
+        { ok: false, error: "Missing CLICKUP_API_TOKEN" },
+        { status: 500 }
+      );
+    }
+
     const body = (await req.json()) as ClickUpWebhookBody;
     const triggerTaskId = body.payload.id;
     const listIdFromPayload =
@@ -237,92 +284,119 @@ export async function POST(req: NextRequest) {
     console.info("[Webhook] Trigger taskId:", triggerTaskId);
     console.info("[Webhook] ListId from payload:", listIdFromPayload);
 
-    // Pokud webhook není z Projects listu, ignoruj (nebo podle potřeby)
+    // jen Projects list – ostatní ignorujeme
     if (!listIdFromPayload || listIdFromPayload !== PROJECTS_LIST_ID) {
       console.info("[Webhook] Ignoring – not from Projects list");
       return NextResponse.json({ ok: true });
     }
 
-    // 1) Načti všechny tasky v tomhle listu
+    // Načteme tasky v Projects listu
     const allTasks = await getTasksInList(PROJECTS_LIST_ID);
-    console.info("[Webhook] Tasks in list:", allTasks.length);
+    console.info("[Webhook] Tasks in Projects list:", allTasks.length);
 
-    // Najdi trigger task i v seznamu, ať máš jeho custom fields
     const triggerTask = allTasks.find((t) => t.id === triggerTaskId);
     if (!triggerTask) {
-      console.warn("[Webhook] Trigger task not found in list");
+      console.warn("[Webhook] Trigger task not found in Projects list");
       return NextResponse.json({ ok: true });
     }
 
-    // 2) Kandidáti pro fakturaci:
-    // ReadyToInvoice = true && InvoiceNumber prázdný
+    // 1) Kandidáti pro fakturaci: Invoiced (checkbox) == true && Invoice Number je prázdný
     const allCandidates = allTasks.filter((t) => {
       const ready = !!getFieldValueFromTask(t, CF_READY_TO_INVOICE_ID);
       const invoiceNumber = getFieldValueFromTask(
         t,
         CF_PROJECT_INVOICE_NUMBER_ID
       );
-      return ready && (invoiceNumber === null || invoiceNumber === undefined);
+      const hasInvoiceNumber =
+        invoiceNumber !== undefined &&
+        invoiceNumber !== null &&
+        String(invoiceNumber).trim() !== "";
+
+      return ready && !hasInvoiceNumber;
     });
 
     console.info(
-      "[Webhook] Kandidáti pro fakturaci (vše):",
+      "[Webhook] Candidates (all, ready & no invoice number):",
       allCandidates.map((t) => t.id)
     );
 
     if (allCandidates.length === 0) {
-      console.info("[Webhook] Žádní kandidáti – končím.");
+      console.info("[Webhook] No candidates – nothing to invoice.");
       return NextResponse.json({ ok: true });
     }
 
-    // 3) Omez kandidáty na stejného klienta jako má triggerTask
-    const triggerClientName = getFieldValueFromTask(
+    // 2) Získáme client option ID z webhooku (primárně) / z tasku (fallback)
+    const triggerClientOptionFromWebhook = getFieldValueFromWebhook(
+      body,
+      CF_PROJECT_CLIENT_NAME_ID
+    );
+    const triggerClientOptionFromTask = getFieldValueFromTask(
       triggerTask,
       CF_PROJECT_CLIENT_NAME_ID
-    ) as string | undefined;
+    );
 
-    if (!triggerClientName) {
+    const triggerClientOptionId =
+      (triggerClientOptionFromWebhook ??
+        triggerClientOptionFromTask) ?? undefined;
+
+    if (!triggerClientOptionId) {
       console.warn(
-        "[Webhook] Trigger task nemá nastaveného klienta – končím bez faktury."
+        "[Webhook] Trigger task nemá nastaveného klienta (option id) – končím."
       );
       return NextResponse.json({ ok: true });
     }
 
-    const candidates = allCandidates.filter(
-      (t) =>
-        getFieldValueFromTask(t, CF_PROJECT_CLIENT_NAME_ID) ===
-        triggerClientName
-    );
+    // 3) Filtrovat kandidáty na stejného klienta (stejné dropdown option ID)
+    const candidatesSameClient = allCandidates.filter((t) => {
+      const optId = getFieldValueFromTask(t, CF_PROJECT_CLIENT_NAME_ID);
+      return optId === triggerClientOptionId;
+    });
 
     console.info(
-      "[Webhook] Kandidáti pro fakturaci (stejný klient):",
-      candidates.map((t) => t.id)
+      "[Webhook] Candidates for same client:",
+      candidatesSameClient.map((t) => t.id)
     );
 
-    if (candidates.length === 0) {
+    if (candidatesSameClient.length === 0) {
       console.info(
         "[Webhook] Žádní kandidáti pro stejného klienta – končím."
       );
       return NextResponse.json({ ok: true });
     }
 
-    // 4) Hlavní trigger – aby se faktura negenerovala víckrát
-    const sortedCandidateIds = [...candidates]
+    // 4) Hlavní trigger – jen jeden webhook skutečně generuje fakturu
+    const sortedCandidateIds = [...candidatesSameClient]
       .map((t) => t.id)
       .sort((a, b) => a.localeCompare(b));
     const mainTriggerId = sortedCandidateIds[0];
 
     if (triggerTaskId !== mainTriggerId) {
       console.info(
-        "[Webhook] Přeskakuju fakturaci v tomhle webhooku, hlavní trigger je",
+        "[Webhook] Skipping this webhook, main trigger is",
         mainTriggerId,
-        "aktuální je",
+        "current is",
         triggerTaskId
       );
       return NextResponse.json({ ok: true });
     }
 
-    // 5) Najdi klienta v Clients listu
+    // 5) Mapa optionId -> clientName ("Jakub Nitran")
+    const clientOptionsMap = await getClientDropdownOptions();
+    const triggerClientName = clientOptionsMap.get(
+      triggerClientOptionId as string
+    );
+
+    if (!triggerClientName) {
+      console.warn(
+        "[Webhook] Client option id nemá label – končím. OptionId:",
+        triggerClientOptionId
+      );
+      return NextResponse.json({ ok: true });
+    }
+
+    console.info("[Webhook] Trigger client name:", triggerClientName);
+
+    // 6) Najdi klienta v Clients listu podle jména
     const client = await findClientByName(triggerClientName);
     if (!client) {
       console.warn(
@@ -331,10 +405,11 @@ export async function POST(req: NextRequest) {
       );
       return NextResponse.json({ ok: true });
     }
+
     const clientPayload = buildClientPayload(client);
 
-    // 6) Připrav položky faktury
-    const invoiceItems = candidates.map((t) => {
+    // 7) Připrav položky faktury
+    const invoiceItems: InvoiceItem[] = candidatesSameClient.map((t) => {
       const hourlyRate =
         Number(getFieldValueFromTask(t, CF_HOURLY_RATE_ID)) || 0;
       const totalPrice =
@@ -342,7 +417,7 @@ export async function POST(req: NextRequest) {
       return {
         taskId: t.id,
         name: t.name,
-        hourlyRate,
+        hourlyRate: round2(hourlyRate),
         totalPrice: round2(totalPrice),
       };
     });
@@ -352,13 +427,18 @@ export async function POST(req: NextRequest) {
     );
 
     console.info("[Webhook] Invoice items:", invoiceItems);
+    console.info("[Webhook] Invoice total:", total);
 
-    // 7) Vygeneruj číslo faktury
+    if (total <= 0) {
+      console.warn("[Webhook] Total <= 0 – nebudu generovat fakturu.");
+      return NextResponse.json({ ok: true });
+    }
+
+    // 8) Vygeneruj číslo faktury
     const nextInvoiceNumber = await getNextInvoiceNumber();
     const now = new Date();
     const year = now.getFullYear();
     const humanNumber = `${year}-${padNumber(nextInvoiceNumber, 3)}`;
-
     const shortCode = client.shortCode || "CL";
     const invoiceName = `F${humanNumber}_${shortCode}`;
 
@@ -367,7 +447,7 @@ export async function POST(req: NextRequest) {
       now.getTime() + client.defaultDueDays * 24 * 60 * 60 * 1000
     );
 
-    // 8) Pošli fakturu (email + případné PDF)
+    // 9) Pošli fakturu mailem (stub)
     const emailResult = await sendInvoiceEmail({
       client: clientPayload,
       invoiceMeta: {
@@ -380,15 +460,22 @@ export async function POST(req: NextRequest) {
       items: invoiceItems,
     });
 
-    // 9) Vytvoř task v Invoices listu
+    // 10) Vytvoř task v Invoices listu
     const invoiceTask = await createInvoiceTask({
       name: invoiceName,
       custom_fields: [
-        { id: CF_INVOICE_NUMBER_ID, value: nextInvoiceNumber },
+        { id: CF_INVOICE_NUMBER_ID, value: String(nextInvoiceNumber) },
         { id: CF_INVOICE_CLIENT_NAME_ID, value: client.name },
         { id: CF_INVOICE_TOTAL_ID, value: total },
-        { id: CF_INVOICE_ISSUE_DATE_ID, value: issueDate.getTime() },
-        { id: CF_INVOICE_DUE_DATE_ID, value: dueDate.getTime() },
+        {
+          id: CF_INVOICE_ISSUE_DATE_ID,
+          value: issueDate.getTime(),
+        },
+        {
+          id: CF_INVOICE_DUE_DATE_ID,
+          value: dueDate.getTime(),
+        },
+        { id: CF_INVOICE_INVOICED_ID, value: true },
         { id: CF_INVOICE_PAID_ID, value: false },
         ...(emailResult.pdfUrl
           ? [{ id: CF_INVOICE_PDF_LINK_ID, value: emailResult.pdfUrl }]
@@ -398,24 +485,33 @@ export async function POST(req: NextRequest) {
 
     console.info("[Webhook] Invoice task created:", invoiceTask.id);
 
-    // 🔟 Aktualizuj PROJECT tasks – nastav Invoice number + ReadyToInvoice=false
+    // 11) Aktualizuj PROJECT tasks – nastav Invoice number + ReadyToInvoice=false
     for (const item of invoiceItems) {
       await updateTask(item.taskId, {
         custom_fields: [
-          { id: CF_PROJECT_INVOICE_NUMBER_ID, value: nextInvoiceNumber },
-          { id: CF_READY_TO_INVOICE_ID, value: false },
+          {
+            id: CF_PROJECT_INVOICE_NUMBER_ID,
+            value: String(nextInvoiceNumber),
+          },
+          {
+            id: CF_READY_TO_INVOICE_ID,
+            value: false,
+          },
         ],
       });
     }
 
     console.info(
-      "[Webhook] Custom fields aktualizovány pro fakturované tasky:",
+      "[Webhook] Custom fields updated for invoiced tasks:",
       invoiceItems.map((i) => i.taskId)
     );
 
     return NextResponse.json({ ok: true });
-  } catch (err) {
-    console.error("[Webhook] ERROR:", err);
-    return NextResponse.json({ ok: false, error: "Internal error" }, { status: 500 });
+  } catch (err: any) {
+    console.error("[Webhook] ERROR:", err?.message ?? err);
+    return NextResponse.json(
+      { ok: false, error: "Internal error" },
+      { status: 500 }
+    );
   }
 }

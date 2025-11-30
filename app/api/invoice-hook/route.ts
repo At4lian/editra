@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// app/api/clickup-webhook/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
 // ============ CONFIG ============
@@ -57,18 +58,13 @@ const INVOICE_BCC = process.env.INVOICE_BCC_EMAIL ?? "";
 
 // ============ TYPY ============
 
-type WebhookField = {
-  field_id: string;
-  value: any;
-};
-
 type ClickUpWebhookBody = {
   payload: {
     id: string;
     name: string;
     subcategory?: string; // list_id
     lists?: { list_id: string; type: string }[];
-    fields?: WebhookField[];
+    // fields?: ... (nejsou potřeba, všechno teď taháme přes API)
   };
 };
 
@@ -139,10 +135,15 @@ async function clickUpFetch(path: string, init?: RequestInit) {
   return res.json();
 }
 
-// 🔧 TADY JE OPRAVA – žádné custom_fields=true
 async function getTasksInList(listId: string): Promise<ClickUpTask[]> {
   const data = await clickUpFetch(`/list/${listId}/task?archived=false`);
   return (data.tasks ?? []) as ClickUpTask[];
+}
+
+// Dotažení jednoho tasku včetně všech custom_fields
+async function getTaskById(taskId: string): Promise<ClickUpTask> {
+  const data = await clickUpFetch(`/task/${taskId}`);
+  return data as ClickUpTask;
 }
 
 async function updateTask(taskId: string, body: any) {
@@ -243,7 +244,6 @@ async function sendInvoiceEmail(args: {
   };
   items: InvoiceItem[];
 }): Promise<{ pdfUrl?: string }> {
-  // Tady si doplň vlastní logiku (PDF + Resend)
   console.info("[Invoice] Sending email (stub)", {
     to: args.client.email,
     invoice: args.invoiceMeta.invoiceName,
@@ -315,18 +315,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // 3) Z kandidátů vytáhneme jejich Client (dropdown option ID)
-    const candidateClientOpts = allCandidates.map((t) => ({
-      taskId: t.id,
-      clientOpt: getFieldValueFromTask(t, CF_PROJECT_CLIENT_NAME_ID),
-    }));
+    // 3) Pro KAŽDÉHO kandidáta se pokusíme zjistit Client (option ID).
+    //    Když není v allTasks.custom_fields, dotáhneme task přes GET /task/{id}.
+    const candidateClientOpts: { taskId: string; clientOpt: any }[] = [];
+
+    for (const t of allCandidates) {
+      let clientOpt = getFieldValueFromTask(t, CF_PROJECT_CLIENT_NAME_ID);
+
+      if (!clientOpt) {
+        console.info(
+          "[Webhook] Client option not in list-task for",
+          t.id,
+          "– fetching full task"
+        );
+        const full = await getTaskById(t.id);
+        clientOpt = getFieldValueFromTask(full, CF_PROJECT_CLIENT_NAME_ID);
+
+        console.info("[Webhook] Full task clientOpt for", t.id, "=", clientOpt);
+      }
+
+      candidateClientOpts.push({ taskId: t.id, clientOpt });
+    }
+
+    console.info(
+      "[Webhook] Candidate client options (after full-task fallback):",
+      candidateClientOpts
+    );
 
     const tasksMissingClient = candidateClientOpts.filter(
       (c) => !c.clientOpt
     );
     if (tasksMissingClient.length > 0) {
       console.warn(
-        "[Webhook] Některé kandidátní tasky nemají nastaveného klienta, končím.",
+        "[Webhook] Některé kandidátní tasky NEMÁJÍ klienta ani po GET /task – končím.",
         tasksMissingClient.map((t) => t.taskId)
       );
       return NextResponse.json({ ok: true });

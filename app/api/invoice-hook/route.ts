@@ -122,6 +122,14 @@ function getFieldObjectFromTask(
   return task.custom_fields?.find((f) => f.id === fieldId);
 }
 
+function cleanText(value: string | number | undefined | null): string {
+  if (value === undefined || value === null) return "";
+  const str = String(value);
+  // vyhodí diakritiku (NFD + odstranění combining marks)
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+
 async function clickUpFetch(path: string, init?: RequestInit) {
   const url = `${CLICKUP_API_BASE}${path}`;
   const res = await fetch(url, {
@@ -287,7 +295,6 @@ function buildClientPayload(client: ClientRecord) {
 }
 
 // ============ PDF (pdf-lib) ============
-
 async function generateInvoicePdfBuffer(args: {
   client: ReturnType<typeof buildClientPayload>;
   invoiceMeta: {
@@ -309,11 +316,17 @@ async function generateInvoicePdfBuffer(args: {
 
   let y = 800;
 
-  const drawText = (text: string, options: { x?: number; y?: number; size?: number } = {}) => {
+  const drawText = (
+    text: string,
+    options: { x?: number; y?: number; size?: number } = {}
+  ) => {
     const size = options.size ?? 10;
     const x = options.x ?? 50;
     const yy = options.y ?? y;
-    page.drawText(text, {
+
+    const txt = cleanText(text); // <<< tady čistíme diakritiku
+
+    page.drawText(txt, {
       x,
       y: yy,
       size,
@@ -330,7 +343,9 @@ async function generateInvoicePdfBuffer(args: {
     size: 18,
   });
   drawText(`Invoice number: ${invoiceMeta.invoiceNumber}`);
-  drawText(`Issue date: ${invoiceMeta.issueDate.toLocaleDateString("cs-CZ")}`);
+  drawText(
+    `Issue date: ${invoiceMeta.issueDate.toLocaleDateString("cs-CZ")}`
+  );
   drawText(`Due date: ${invoiceMeta.dueDate.toLocaleDateString("cs-CZ")}`);
   y -= 10;
 
@@ -360,6 +375,7 @@ async function generateInvoicePdfBuffer(args: {
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);
 }
+
 
 // ============ Attach PDF to ClickUp task ============
 

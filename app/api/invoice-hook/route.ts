@@ -736,7 +736,7 @@ export async function POST(req: NextRequest) {
     });
 
     // 13) Update PROJECTS tasků – Invoice Number + Invoiced=false
- for (const item of invoiceItems) {
+for (const item of invoiceItems) {
   console.info(
     "[Webhook] Updating project task",
     item.taskId,
@@ -751,12 +751,7 @@ export async function POST(req: NextRequest) {
     invoiceName
   );
 
-  // „Invoiced“ (náš ReadyToInvoice) zpátky na false
-  await updateTaskCustomField(
-    item.taskId,
-    CF_READY_TO_INVOICE_ID,
-    false
-  );
+  // Na Invoiced/ReadyToInvoice už NEŠAHÁME – má zůstat tak, jak je
 
   const updated = await getTaskById(item.taskId);
   const invNumAfter = getFieldValueFromTask(
@@ -773,7 +768,7 @@ export async function POST(req: NextRequest) {
     item.taskId,
     "InvoiceNumber=",
     invNumAfter,
-    "ReadyToInvoice=",
+    "ReadyToInvoice(still)=",
     readyAfter
   );
 }

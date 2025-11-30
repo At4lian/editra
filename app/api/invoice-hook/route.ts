@@ -58,12 +58,6 @@ function getClientName(field: ClickUpCustomField | undefined): string | undefine
   return undefined;
 }
 
-// Checkbox value může být true/false nebo "true"/"false"
-function isCheckboxTrue(field: ClickUpCustomField | undefined): boolean {
-  if (!field) return false;
-  return field.value === true || field.value === 'true';
-}
-
 async function updateCustomField(
   taskId: string,
   fieldId: string,
@@ -159,13 +153,17 @@ export async function POST(req: NextRequest) {
 
     console.log('Počet tasků v listu:', tasks.length);
 
-    // 4) Najdeme kandidáty: status = "invoiced" a custom field "Invoiced" = false
+    // 4) Najdeme kandidáty:
+    //    status = "invoiced" a custom field "Invoice Number" je prázdný
     const candidateTasks: ClickUpTask[] = tasks.filter((t) => {
       const statusName = (t as any).status?.status;
       const customFields = t.custom_fields ?? [];
 
-      const invoicedField = findCustomField(customFields, 'Invoiced');
-      const alreadyInvoiced = isCheckboxTrue(invoicedField);
+      const invoiceNumberField = findCustomField(customFields, 'Invoice Number');
+      const alreadyInvoiced =
+        invoiceNumberField &&
+        invoiceNumberField.value != null &&
+        String(invoiceNumberField.value).trim() !== '';
 
       return statusName === 'invoiced' && !alreadyInvoiced;
     });
@@ -173,7 +171,7 @@ export async function POST(req: NextRequest) {
     console.log('Kandidáti pro fakturaci:', candidateTasks.map((t) => t.id));
 
     if (candidateTasks.length === 0) {
-      console.log('Žádné tasky k fakturaci (status invoiced & Invoiced=false).');
+      console.log('Žádné tasky k fakturaci (status invoiced & Invoice Number prázdný).');
       return NextResponse.json({ ok: false, error: 'No tasks to invoice' }, { status: 200 });
     }
 
@@ -295,7 +293,6 @@ export async function POST(req: NextRequest) {
       now.getMonth() + 1,
     ).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${clientKey}`;
 
-    // Pokud někdy budeš chtít: můžeš brát Invoice Number z některého hlavního tasku.
     const invoiceNumber = fallbackInvoiceNumber;
 
     // 8) HTML faktury – víc řádků
@@ -381,7 +378,9 @@ export async function POST(req: NextRequest) {
 
     console.log('Resend success (invoice):', data);
 
-    // 10) Označíme tasky jako fakturované: Invoiced = true, Invoice Number = invoiceNumber
+    // 10) Označíme tasky jako fakturované:
+    //     Invoice Number = invoiceNumber
+    //     Invoiced = true (pokud pole existuje)
     const firstFields = candidateTasks[0].custom_fields ?? [];
     const invoicedField = findCustomField(firstFields, 'Invoiced');
     const invoiceNumberField = findCustomField(firstFields, 'Invoice Number');

@@ -736,7 +736,7 @@ export async function POST(req: NextRequest) {
     });
 
     // 13) Update PROJECTS tasků – Invoice Number + Invoiced=false
-for (const item of invoiceItems) {
+  for (const item of invoiceItems) {
   console.info(
     "[Webhook] Updating project task",
     item.taskId,
@@ -745,12 +745,11 @@ for (const item of invoiceItems) {
   );
 
   // Do PROJECT tasku zapisujeme název faktury, např. "F2025-004_JK"
- await updateTaskCustomField(
+  await updateTaskCustomField(
     item.taskId,
-    CF_READY_TO_INVOICE_ID,
-    false
+    CF_PROJECT_INVOICE_NUMBER_ID,
+    invoiceName
   );
-
 
   // Na Invoiced/ReadyToInvoice už NEŠAHÁME – má zůstat tak, jak je
 

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
-import PDFDocument from "pdfkit";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 // ============ CONFIG ============
 
@@ -21,7 +21,7 @@ const CF_TOTAL_PRICE_ID = "4f368785-f1ac-490e-9131-581c56e110a0";
 const CF_PROJECT_CLIENT_NAME_ID = "586f7811-79a0-40a6-ad55-324b98a53824";
 // Hourly Rate (currency)
 const CF_HOURLY_RATE_ID = "7ed74ee6-bacf-4526-aaa9-1580c689712b";
-// Invoice Number (short_text) – číslo faktury, které doplníme do PROJECTS tasků
+// Invoice Number (short_text) – číslo faktury na PROJECTS tasku
 const CF_PROJECT_INVOICE_NUMBER_ID = "82a5d55e-dadc-4978-bb1c-6d7b3c837acd";
 // Invoiced (checkbox) – používáme jako "ReadyToInvoice"
 const CF_READY_TO_INVOICE_ID = "c1aefd2b-2894-4e45-9edf-0e484a85bc86";
@@ -45,16 +45,11 @@ const CF_CLIENT_SHORT_CODE_ID = "fc6f7b03-7a31-4c04-ae7d-b5a0c0653f49"; // Short
 const CF_INVOICE_TOTAL_ID = "2f695604-81dc-4cf3-a279-b5ab0a81f35f"; // Total (currency)
 const CF_INVOICE_DUE_DATE_ID = "4cb58b5f-4f97-4aca-8169-2ee0e1c91e91"; // Due Date (date)
 const CF_INVOICE_CLIENT_NAME_ID = "7d9683e2-9305-456c-8f4d-0ed4fe181b00"; // Client (short_text)
-const CF_INVOICE_NUMBER_ID = "82a5d55e-dadc-4978-bb1c-6d7b3c837acd"; // Invoice Number (short_text) – stejný field jako u Projects
+const CF_INVOICE_NUMBER_ID = "82a5d55e-dadc-4978-bb1c-6d7b3c837acd"; // Invoice Number (short_text)
 const CF_INVOICE_ISSUE_DATE_ID = "872b7d98-e277-43ac-87e1-f5048fb4ad9c"; // Issue Date (date)
 const CF_INVOICE_PDF_LINK_ID = "97a94428-dd1e-4c4b-b176-76b99de1c877"; // PDF Link (url)
 const CF_INVOICE_INVOICED_ID = "c1aefd2b-2894-4e45-9edf-0e484a85bc86"; // Invoiced (checkbox)
 const CF_INVOICE_PAID_ID = "cfd3baf0-35b2-4f2b-8d75-f7e0341dc322"; // Paid (checkbox)
-
-// Resend / mail – zatím jen stub
-const RESEND_API_KEY = process.env.RESEND_API_KEY ?? "";
-const INVOICE_SENDER = process.env.INVOICE_SENDER_EMAIL ?? "";
-const INVOICE_BCC = process.env.INVOICE_BCC_EMAIL ?? "";
 
 // ============ TYPY ============
 
@@ -144,10 +139,8 @@ async function clickUpFetch(path: string, init?: RequestInit) {
     throw new Error(`ClickUp API error ${res.status}`);
   }
 
-  const contentType = res.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) {
-    return res.json();
-  }
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) return res.json();
   return res.text();
 }
 
@@ -156,7 +149,6 @@ async function getTasksInList(listId: string): Promise<ClickUpTask[]> {
   return (data as any).tasks ?? [];
 }
 
-// Dotažení jednoho tasku včetně všech custom_fields
 async function getTaskById(taskId: string): Promise<ClickUpTask> {
   const data = await clickUpFetch(`/task/${taskId}`);
   return data as ClickUpTask;
@@ -165,9 +157,7 @@ async function getTaskById(taskId: string): Promise<ClickUpTask> {
 async function updateTask(taskId: string, body: any) {
   const data = await clickUpFetch(`/task/${taskId}`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   return data;
@@ -179,15 +169,13 @@ async function createInvoiceTask(payload: {
 }): Promise<{ id: string }> {
   const data = await clickUpFetch(`/list/${INVOICES_LIST_ID}/task`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   return { id: (data as any).id as string };
 }
 
-// Načtení dropdown options pro Client (Projects list)
+// Dropdown metadata
 async function getClientDropdownMeta(): Promise<ClientDropdownMeta> {
   const data = await clickUpFetch(`/list/${PROJECTS_LIST_ID}/field`);
   const field = (data as any).fields?.find(
@@ -219,7 +207,6 @@ async function getClientDropdownMeta(): Promise<ClientDropdownMeta> {
   return { byOptionId, byOrderIndex };
 }
 
-// Z raw value (0, 'uuid', 'Jakub Nitran') udělá jednotnou reprezentaci
 function resolveClientOption(
   rawValue: any,
   meta: ClientDropdownMeta
@@ -229,11 +216,7 @@ function resolveClientOption(
   if (typeof rawValue === "number") {
     const found = meta.byOrderIndex.get(rawValue);
     if (!found) {
-      console.warn(
-        "[DropdownMeta] No option for numeric value",
-        rawValue,
-        "– returning null"
-      );
+      console.warn("[DropdownMeta] No option for numeric value", rawValue);
       return null;
     }
     return { key: found.id, label: found.name };
@@ -245,14 +228,8 @@ function resolveClientOption(
 
     const allById = Array.from(meta.byOptionId.entries());
     const byName = allById.find(([, v]) => v.name === rawValue);
-    if (byName) {
-      return { key: byName[0], label: byName[1].name };
-    }
+    if (byName) return { key: byName[0], label: byName[1].name };
 
-    console.warn(
-      "[DropdownMeta] String client value nezapadá ani jako ID ani jako name:",
-      rawValue
-    );
     return { key: rawValue, label: rawValue };
   }
 
@@ -309,7 +286,7 @@ function buildClientPayload(client: ClientRecord) {
   };
 }
 
-// ============ PDF GENERATION ============
+// ============ PDF (pdf-lib) ============
 
 async function generateInvoicePdfBuffer(args: {
   client: ReturnType<typeof buildClientPayload>;
@@ -322,61 +299,69 @@ async function generateInvoicePdfBuffer(args: {
   };
   items: InvoiceItem[];
 }): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: 50 });
+  const { client, invoiceMeta, items } = args;
 
-    const chunks: Buffer[] = [];
-    doc.on("data", (chunk) => chunks.push(chunk as Buffer));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.on("error", reject);
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage();
+  const { width } = page.getSize();
 
-    const { client, invoiceMeta, items } = args;
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-    // Header
-    doc.fontSize(20).text(`Invoice ${invoiceMeta.invoiceName}`, { align: "right" });
-    doc.moveDown();
+  let y = 800;
 
-    doc.fontSize(10);
-    doc.text(`Invoice number: ${invoiceMeta.invoiceNumber}`);
-    doc.text(
-      `Issue date: ${invoiceMeta.issueDate.toLocaleDateString("cs-CZ")}`
-    );
-    doc.text(`Due date: ${invoiceMeta.dueDate.toLocaleDateString("cs-CZ")}`);
-    doc.moveDown();
-
-    // Client block
-    doc.fontSize(12).text("Bill To:", { underline: true });
-    doc.moveDown(0.3);
-    doc.fontSize(10);
-    doc.text(client.name);
-    doc.text(client.address);
-    if (client.ico) doc.text(`IČ: ${client.ico}`);
-    if (client.dic) doc.text(`DIČ: ${client.dic}`);
-    doc.moveDown();
-
-    // Items
-    doc.fontSize(12).text("Items", { underline: true });
-    doc.moveDown(0.5);
-
-    doc.fontSize(10);
-    items.forEach((item) => {
-      doc.text(item.name, { continued: false });
-      doc.text(`Hourly rate: ${item.hourlyRate.toFixed(2)} Kč`, { indent: 10 });
-      doc.text(`Total: ${item.totalPrice.toFixed(2)} Kč`, { indent: 10 });
-      doc.moveDown(0.5);
+  const drawText = (text: string, options: { x?: number; y?: number; size?: number } = {}) => {
+    const size = options.size ?? 10;
+    const x = options.x ?? 50;
+    const yy = options.y ?? y;
+    page.drawText(text, {
+      x,
+      y: yy,
+      size,
+      font,
+      color: rgb(0, 0, 0),
     });
+    y = yy - size - 4;
+  };
 
-    doc.moveDown();
-    doc.fontSize(12).text(
-      `Total: ${invoiceMeta.total.toFixed(2)} Kč`,
-      { align: "right" }
-    );
-
-    doc.end();
+  // Header
+  drawText(`Invoice ${invoiceMeta.invoiceName}`, {
+    x: width - 250,
+    y,
+    size: 18,
   });
+  drawText(`Invoice number: ${invoiceMeta.invoiceNumber}`);
+  drawText(`Issue date: ${invoiceMeta.issueDate.toLocaleDateString("cs-CZ")}`);
+  drawText(`Due date: ${invoiceMeta.dueDate.toLocaleDateString("cs-CZ")}`);
+  y -= 10;
+
+  // Client
+  drawText("Bill To:", { size: 12 });
+  drawText(client.name);
+  drawText(client.address);
+  if (client.ico) drawText(`IČ: ${client.ico}`);
+  if (client.dic) drawText(`DIČ: ${client.dic}`);
+  y -= 10;
+
+  // Items
+  drawText("Items:", { size: 12 });
+  for (const item of items) {
+    drawText(item.name, { size: 11 });
+    drawText(`Hourly rate: ${item.hourlyRate.toFixed(2)} Kč`, { x: 60 });
+    drawText(`Total: ${item.totalPrice.toFixed(2)} Kč`, { x: 60 });
+    y -= 4;
+  }
+
+  y -= 10;
+  drawText(`Total: ${invoiceMeta.total.toFixed(2)} Kč`, {
+    x: width - 200,
+    size: 12,
+  });
+
+  const pdfBytes = await pdfDoc.save();
+  return Buffer.from(pdfBytes);
 }
 
-// ============ ATTACH PDF TO CLICKUP TASK ============
+// ============ Attach PDF to ClickUp task ============
 
 async function attachPdfToTask(
   taskId: string,
@@ -389,10 +374,7 @@ async function attachPdfToTask(
 
   const res = await fetch(`${CLICKUP_API_BASE}/task/${taskId}/attachment`, {
     method: "POST",
-    headers: {
-      Authorization: CLICKUP_API_TOKEN,
-      // Content-Type necháme na fetchu – nastaví boundary sám
-    },
+    headers: { Authorization: CLICKUP_API_TOKEN },
     body: form,
   });
 
@@ -403,7 +385,6 @@ async function attachPdfToTask(
   }
 
   const data = (await res.json()) as any;
-  // Response struktura není úplně jasná, zalogujeme
   console.info("[Webhook] Attachment response:", data);
 
   const url =
@@ -412,15 +393,11 @@ async function attachPdfToTask(
     data?.url ??
     null;
 
-  console.info("[Webhook] Attachment created for invoice:", {
-    taskId,
-    url,
-  });
-
+  console.info("[Webhook] Attachment created for invoice:", { taskId, url });
   return url;
 }
 
-// ============ EMAIL / RESEND (STUB) ============
+// ============ EMAIL (zatím stub) ============
 
 async function sendInvoiceEmail(args: {
   client: ReturnType<typeof buildClientPayload>;
@@ -434,7 +411,7 @@ async function sendInvoiceEmail(args: {
   items: InvoiceItem[];
   pdfBuffer: Buffer;
   pdfUrl?: string | null;
-}): Promise<void> {
+}) {
   console.info("[Invoice] Sending email (stub)", {
     to: args.client.email,
     invoice: args.invoiceMeta.invoiceName,
@@ -442,8 +419,6 @@ async function sendInvoiceEmail(args: {
     items: args.items.length,
     pdfUrl: args.pdfUrl,
   });
-
-  // Tady si později přidáš reálný Resend call s PDF přílohou
 }
 
 // ============ ROUTE HANDLER ============
@@ -481,7 +456,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // 2) Kandidáti = všechno, co má Invoiced=true a Invoice Number prázdné
+    // 2) Kandidáti = Invoiced=true a Invoice Number prázdné
     const allCandidates = allTasks.filter((t) => {
       const ready = !!getFieldValueFromTask(t, CF_READY_TO_INVOICE_ID);
       const invoiceNumber = getFieldValueFromTask(
@@ -509,13 +484,8 @@ export async function POST(req: NextRequest) {
     // 3) Dropdown metadata
     const dropdownMeta = await getClientDropdownMeta();
 
-    // 4) Pro každého kandidáta zjistíme client (option value)
-    const candidateClientResolved: {
-      taskId: string;
-      rawValue: any;
-      resolved: { key: string; label: string } | null;
-    }[] = [];
-
+    // 4) Vyřešit klienta pro každého kandidáta
+    const candidateClientResolved = [];
     for (const t of allCandidates) {
       let field = getFieldObjectFromTask(t, CF_PROJECT_CLIENT_NAME_ID);
 
@@ -542,11 +512,7 @@ export async function POST(req: NextRequest) {
       const resolved = resolveClientOption(rawValue, dropdownMeta);
       console.info("[Webhook] Resolved client for task", t.id, "=", resolved);
 
-      candidateClientResolved.push({
-        taskId: t.id,
-        rawValue,
-        resolved,
-      });
+      candidateClientResolved.push({ taskId: t.id, rawValue, resolved });
     }
 
     console.info(
@@ -560,26 +526,26 @@ export async function POST(req: NextRequest) {
     if (tasksMissingClient.length > 0) {
       console.warn(
         "[Webhook] Některé kandidátní tasky NEMÁJÍ klienta ani po resolve – končím.",
-        tasksMissingClient.map((t) => t.taskId)
+        tasksMissingClient.map((t: any) => t.taskId)
       );
       return NextResponse.json({ ok: true });
     }
 
     const clientKeys = candidateClientResolved.map(
-      (c) => c.resolved!.key
+      (c: any) => c.resolved!.key
     );
     const uniqueClientKeys = Array.from(new Set(clientKeys));
 
     if (uniqueClientKeys.length > 1) {
       console.warn(
-        "[Webhook] Kandidáti mají různé klienty (po resolve) – nechci míchat více klientů do jedné faktury. Končím.",
+        "[Webhook] Kandidáti mají různé klienty – nechci míchat více klientů do jedné faktury.",
         { uniqueClientKeys, candidateClientResolved }
       );
       return NextResponse.json({ ok: true });
     }
 
     const sharedClientKey = uniqueClientKeys[0];
-    const anyResolved = candidateClientResolved[0].resolved!;
+    const anyResolved = (candidateClientResolved as any)[0].resolved!;
     const clientName = anyResolved.label;
 
     console.info(
@@ -591,7 +557,7 @@ export async function POST(req: NextRequest) {
 
     const candidates = allCandidates;
 
-    // 5) Hlavní trigger – aby se faktura negenerovala víckrát
+    // 5) Hlavní trigger, ať se faktura nevytvoří víckrát
     const sortedCandidateIds = [...candidates]
       .map((t) => t.id)
       .sort((a, b) => a.localeCompare(b));
@@ -607,7 +573,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // 6) Najdi klienta v Clients listu
+    // 6) Klient v Clients listu
     const client = await findClientByName(clientName);
     if (!client) {
       console.warn(
@@ -619,7 +585,7 @@ export async function POST(req: NextRequest) {
 
     const clientPayload = buildClientPayload(client);
 
-    // 7) Připrav položky faktury z kandidátů
+    // 7) Položky faktury
     const invoiceItems: InvoiceItem[] = candidates.map((t) => {
       const hourlyRate =
         Number(getFieldValueFromTask(t, CF_HOURLY_RATE_ID)) || 0;
@@ -658,7 +624,7 @@ export async function POST(req: NextRequest) {
       now.getTime() + client.defaultDueDays * 24 * 60 * 60 * 1000
     );
 
-    // 9) PDF FACTURA
+    // 9) PDF
     const pdfBuffer = await generateInvoicePdfBuffer({
       client: clientPayload,
       invoiceMeta: {
@@ -671,7 +637,7 @@ export async function POST(req: NextRequest) {
       items: invoiceItems,
     });
 
-    // 10) Vytvořit task v Invoices listu (zatím bez PDF Link)
+    // 10) Vytvořit invoice task
     const invoiceTask = await createInvoiceTask({
       name: invoiceName,
       custom_fields: [
@@ -687,14 +653,13 @@ export async function POST(req: NextRequest) {
 
     console.info("[Webhook] Invoice task created:", invoiceTask.id);
 
-    // 11) Nahrát PDF jako attachment k faktuře
+    // 11) Nahrát PDF jako attachment
     const pdfUrl = await attachPdfToTask(
       invoiceTask.id,
       pdfBuffer,
       `${invoiceName}.pdf`
     );
 
-    // 12) Dopsat PDF Link, pokud máme URL
     if (pdfUrl) {
       await updateTask(invoiceTask.id, {
         custom_fields: [{ id: CF_INVOICE_PDF_LINK_ID, value: pdfUrl }],
@@ -702,7 +667,7 @@ export async function POST(req: NextRequest) {
       console.info("[Webhook] PDF Link updated on invoice:", pdfUrl);
     }
 
-    // 13) Odeslat e-mail (zatím stub)
+    // 12) E-mail (zatím stub)
     await sendInvoiceEmail({
       client: clientPayload,
       invoiceMeta: {
@@ -717,7 +682,7 @@ export async function POST(req: NextRequest) {
       pdfUrl,
     });
 
-    // 14) Aktualizace PROJECTS tasků – Invoice Number + Invoiced=false
+    // 13) Update PROJECTS tasků – Invoice Number + Invoiced=false
     for (const item of invoiceItems) {
       console.info(
         "[Webhook] Updating project task",
@@ -736,7 +701,6 @@ export async function POST(req: NextRequest) {
         ],
       });
 
-      // Debug: přečteme task po update a zalogujeme hodnoty
       const updated = await getTaskById(item.taskId);
       const invNumAfter = getFieldValueFromTask(
         updated,

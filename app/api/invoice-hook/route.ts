@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
+import fs from "fs";
+import path from "path";
+
 
 // ============ CONFIG ============
 
@@ -124,9 +127,34 @@ function getFieldObjectFromTask(
 
 function cleanText(value: string | number | undefined | null): string {
   if (value === undefined || value === null) return "";
-  const str = String(value);
-  // vyhodí diakritiku (NFD + odstranění combining marks)
-  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return String(value);
+}
+
+let invoiceFontBytesCache: Uint8Array | null = null;
+
+async function getInvoiceFontBytes(): Promise<Uint8Array> {
+  if (invoiceFontBytesCache) return invoiceFontBytesCache;
+
+  const fontPath = path.join(process.cwd(), "public", "fonts", "DejaVuSans.ttf");
+  const data = await fs.promises.readFile(fontPath);
+  invoiceFontBytesCache = data;
+  return invoiceFontBytesCache;
+}
+
+
+
+async function updateTaskCustomField(
+  taskId: string,
+  fieldId: string,
+  value: any
+) {
+  const data = await clickUpFetch(`/task/${taskId}/field/${fieldId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ value }),
+  });
+
+  return data;
 }
 
 
@@ -312,7 +340,9 @@ async function generateInvoicePdfBuffer(args: {
   const page = pdfDoc.addPage();
   const { width } = page.getSize();
 
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  // >>> tady embedneme náš TTF font
+  const fontBytes = await getInvoiceFontBytes();
+  const font = await pdfDoc.embedFont(fontBytes);
 
   let y = 800;
 
@@ -324,7 +354,7 @@ async function generateInvoicePdfBuffer(args: {
     const x = options.x ?? 50;
     const yy = options.y ?? y;
 
-    const txt = cleanText(text); // <<< tady čistíme diakritiku
+    const txt = cleanText(text);
 
     page.drawText(txt, {
       x,
@@ -375,6 +405,7 @@ async function generateInvoicePdfBuffer(args: {
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);
 }
+
 
 
 // ============ Attach PDF to ClickUp task ============
@@ -677,11 +708,14 @@ export async function POST(req: NextRequest) {
     );
 
     if (pdfUrl) {
-      await updateTask(invoiceTask.id, {
-        custom_fields: [{ id: CF_INVOICE_PDF_LINK_ID, value: pdfUrl }],
-      });
+      await updateTaskCustomField(
+        invoiceTask.id,
+        CF_INVOICE_PDF_LINK_ID,
+        pdfUrl
+      );
       console.info("[Webhook] PDF Link updated on invoice:", pdfUrl);
     }
+
 
     // 12) E-mail (zatím stub)
     await sendInvoiceEmail({
@@ -707,15 +741,19 @@ export async function POST(req: NextRequest) {
         nextInvoiceNumber
       );
 
-      await updateTask(item.taskId, {
-        custom_fields: [
-          {
-            id: CF_PROJECT_INVOICE_NUMBER_ID,
-            value: String(nextInvoiceNumber),
-          },
-          { id: CF_READY_TO_INVOICE_ID, value: false },
-        ],
-      });
+      // Invoice Number na PROJECT task
+      await updateTaskCustomField(
+        item.taskId,
+        CF_PROJECT_INVOICE_NUMBER_ID,
+        String(nextInvoiceNumber)
+      );
+
+      // „Invoiced“ (náš ReadyToInvoice) zpátky na false
+      await updateTaskCustomField(
+        item.taskId,
+        CF_READY_TO_INVOICE_ID,
+        false
+      );
 
       const updated = await getTaskById(item.taskId);
       const invNumAfter = getFieldValueFromTask(
@@ -736,6 +774,7 @@ export async function POST(req: NextRequest) {
         readyAfter
       );
     }
+
 
     console.info(
       "[Webhook] Custom fields aktualizovány pro fakturované tasky:",

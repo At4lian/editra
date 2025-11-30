@@ -1,8 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { PDFDocument, rgb } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 import fs from "fs";
 import path from "path";
+
 
 
 // ============ CONFIG ============
@@ -156,6 +158,7 @@ async function updateTaskCustomField(
 
   return data;
 }
+
 
 
 async function clickUpFetch(path: string, init?: RequestInit) {
@@ -337,10 +340,12 @@ async function generateInvoicePdfBuffer(args: {
   const { client, invoiceMeta, items } = args;
 
   const pdfDoc = await PDFDocument.create();
+  // >>> TADY registrujeme fontkit, to ti chybělo <<<
+  (pdfDoc as any).registerFontkit(fontkit);
+
   const page = pdfDoc.addPage();
   const { width } = page.getSize();
 
-  // >>> tady embedneme náš TTF font
   const fontBytes = await getInvoiceFontBytes();
   const font = await pdfDoc.embedFont(fontBytes);
 
@@ -405,8 +410,6 @@ async function generateInvoicePdfBuffer(args: {
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);
 }
-
-
 
 // ============ Attach PDF to ClickUp task ============
 
@@ -733,59 +736,51 @@ export async function POST(req: NextRequest) {
     });
 
     // 13) Update PROJECTS tasků – Invoice Number + Invoiced=false
-    for (const item of invoiceItems) {
-      console.info(
-        "[Webhook] Updating project task",
-        item.taskId,
-        "with invoice number",
-        nextInvoiceNumber
-      );
+   for (const item of invoiceItems) {
+  console.info(
+    "[Webhook] Updating project task",
+    item.taskId,
+    "with invoice number",
+    nextInvoiceNumber
+  );
 
-      // Invoice Number na PROJECT task
-      await updateTaskCustomField(
-        item.taskId,
-        CF_PROJECT_INVOICE_NUMBER_ID,
-        String(nextInvoiceNumber)
-      );
+  await updateTaskCustomField(
+    item.taskId,
+    CF_PROJECT_INVOICE_NUMBER_ID,
+    String(nextInvoiceNumber)
+  );
 
-      // „Invoiced“ (náš ReadyToInvoice) zpátky na false
-      await updateTaskCustomField(
-        item.taskId,
-        CF_READY_TO_INVOICE_ID,
-        false
-      );
+  await updateTaskCustomField(
+    item.taskId,
+    CF_READY_TO_INVOICE_ID,
+    false
+  );
 
-      const updated = await getTaskById(item.taskId);
-      const invNumAfter = getFieldValueFromTask(
-        updated,
-        CF_PROJECT_INVOICE_NUMBER_ID
-      );
-      const readyAfter = !!getFieldValueFromTask(
-        updated,
-        CF_READY_TO_INVOICE_ID
-      );
+  const updated = await getTaskById(item.taskId);
+  const invNumAfter = getFieldValueFromTask(
+    updated,
+    CF_PROJECT_INVOICE_NUMBER_ID
+  );
+  const readyAfter = !!getFieldValueFromTask(
+    updated,
+    CF_READY_TO_INVOICE_ID
+  );
 
-      console.info(
-        "[Webhook] After update task",
-        item.taskId,
-        "InvoiceNumber=",
-        invNumAfter,
-        "ReadyToInvoice=",
-        readyAfter
-      );
-    }
+  console.info(
+    "[Webhook] After update task",
+    item.taskId,
+    "InvoiceNumber=",
+    invNumAfter,
+    "ReadyToInvoice=",
+    readyAfter
+  );
+}
 
-
-    console.info(
-      "[Webhook] Custom fields aktualizovány pro fakturované tasky:",
-      invoiceItems.map((i) => i.taskId)
-    );
-
-    return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    console.error("[Webhook] ERROR:", err?.message ?? err);
+    return NextResponse.json({ ok: true, invoiceTaskId: invoiceTask.id });
+  } catch (error) {
+    console.error("[Webhook] Error:", error);
     return NextResponse.json(
-      { ok: false, error: "Internal error" },
+      { ok: false, error: String(error) },
       { status: 500 }
     );
   }

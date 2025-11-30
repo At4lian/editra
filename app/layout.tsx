@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import LightRays from "./LightRays";
+import { Analytics } from "@vercel/analytics/next"
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="cs">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-950`}>
+        <Analytics/>
         <div className="fixed inset-0 -z-10 overflow-hidden">
             <LightRays
               colorStops={["#3A29FF", "#FF94B4", "#FF3232"]}

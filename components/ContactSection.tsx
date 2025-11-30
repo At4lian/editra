@@ -65,13 +65,13 @@ const ContactSection = ({ level = "h2" }: Props) => (
           <Card>
             <h3 className="text-base font-semibold text-white">Kontakt</h3>
             <div className="mt-3 space-y-2 text-sm text-slate-300">
-              <p className="flex items-center gap-2"><Mail className="h-4 w-4" /> hello@editra.cz</p>
-              <p className="flex items-center gap-2"><Phone className="h-4 w-4" /> +420 777 000 000</p>
+              <p className="flex items-center gap-2"><Mail className="h-4 w-4" /> info@editra.cz</p>
+              <p className="flex items-center gap-2"><Phone className="h-4 w-4" /> +420 737 869 067</p>
               <p className="flex items-center gap-2"><MapPin className="h-4 w-4" /> Plzeň, Česká republika</p>
             </div>
             <div className="mt-4 flex gap-2">
-              <Button variant="ghost" href="mailto:hello@editra.cz">Napsat email</Button>
-              <Button variant="ghost" href="tel:+420777000000">Zavolat</Button>
+              <Button variant="ghost" href="mailto:info@editra.cz">Napsat email</Button>
+              <Button variant="ghost" href="tel:+420737869067">Zavolat</Button>
             </div>
           </Card>
           <Card>

@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// app/api/clickup-webhook/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
 // ============ CONFIG ============
@@ -64,13 +63,14 @@ type ClickUpWebhookBody = {
     name: string;
     subcategory?: string; // list_id
     lists?: { list_id: string; type: string }[];
-    // fields?: ... (nejsou potřeba, všechno teď taháme přes API)
   };
 };
 
 type ClickUpCustomField = {
   id: string;
   value: any;
+  type?: string;
+  type_config?: any;
 };
 
 type ClickUpTask = {
@@ -100,6 +100,11 @@ type InvoiceItem = {
   totalPrice: number;
 };
 
+type ClientDropdownMeta = {
+  byOptionId: Map<string, { name: string; orderindex: number }>;
+  byOrderIndex: Map<number, { id: string; name: string }>;
+};
+
 // ============ HELPERY ============
 
 function round2(n: number): number {
@@ -112,6 +117,13 @@ function padNumber(n: number, digits: number): string {
 
 function getFieldValueFromTask(task: ClickUpTask, fieldId: string): any {
   return task.custom_fields?.find((f) => f.id === fieldId)?.value ?? undefined;
+}
+
+function getFieldObjectFromTask(
+  task: ClickUpTask,
+  fieldId: string
+): ClickUpCustomField | undefined {
+  return task.custom_fields?.find((f) => f.id === fieldId);
 }
 
 async function clickUpFetch(path: string, init?: RequestInit) {
@@ -164,21 +176,82 @@ async function createInvoiceTask(payload: {
   return { id: data.id as string };
 }
 
-// dropdown Client: optionId -> label ("Jakub Nitran")
-async function getClientDropdownOptions(): Promise<Map<string, string>> {
+// Načtení dropdown options pro Client (Projects list)
+async function getClientDropdownMeta(): Promise<ClientDropdownMeta> {
   const data = await clickUpFetch(`/list/${PROJECTS_LIST_ID}/field`);
   const field = (data.fields ?? []).find(
     (f: any) => f.id === CF_PROJECT_CLIENT_NAME_ID
   );
+
   if (!field || !field.type_config || !field.type_config.options) {
     throw new Error("Client dropdown field has no options config");
   }
 
-  const map = new Map<string, string>();
-  for (const opt of field.type_config.options as any[]) {
-    map.set(opt.id, opt.name);
+  const options = field.type_config.options as any[];
+
+  const byOptionId = new Map<string, { name: string; orderindex: number }>();
+  const byOrderIndex = new Map<number, { id: string; name: string }>();
+
+  for (const opt of options) {
+    const id = String(opt.id);
+    const name = String(opt.name);
+    const orderindex =
+      typeof opt.orderindex === "number"
+        ? opt.orderindex
+        : parseInt(String(opt.orderindex ?? "0"), 10);
+
+    byOptionId.set(id, { name, orderindex });
+    byOrderIndex.set(orderindex, { id, name });
   }
-  return map;
+
+  console.info("[DropdownMeta] Options:", options);
+  return { byOptionId, byOrderIndex };
+}
+
+// Z raw value (0, 'uuid', 'Jakub Nitran') udělá jednotnou reprezentaci
+function resolveClientOption(
+  rawValue: any,
+  meta: ClientDropdownMeta
+): { key: string; label: string } | null {
+  if (rawValue === undefined || rawValue === null) return null;
+
+  // číslo => index v dropdownu
+  if (typeof rawValue === "number") {
+    const found = meta.byOrderIndex.get(rawValue);
+    if (!found) {
+      console.warn(
+        "[DropdownMeta] No option for numeric value",
+        rawValue,
+        "– returning null"
+      );
+      return null;
+    }
+    return { key: found.id, label: found.name };
+  }
+
+  // string – může to být option.id nebo přímo jméno
+  if (typeof rawValue === "string") {
+    const byId = meta.byOptionId.get(rawValue);
+    if (byId) {
+      return { key: rawValue, label: byId.name };
+    }
+
+    // fallback – hledat podle name
+    const allById = Array.from(meta.byOptionId.entries());
+    const byName = allById.find(([, v]) => v.name === rawValue);
+    if (byName) {
+      return { key: byName[0], label: byName[1].name };
+    }
+
+    console.warn(
+      "[DropdownMeta] String client value nezapadá ani jako ID ani jako name:",
+      rawValue
+    );
+    return { key: rawValue, label: rawValue };
+  }
+
+  // jiný typ – fallback
+  return { key: String(rawValue), label: String(rawValue) };
 }
 
 // klient podle jména (Clients list)
@@ -315,65 +388,93 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // 3) Pro KAŽDÉHO kandidáta se pokusíme zjistit Client (option ID).
-    //    Když není v allTasks.custom_fields, dotáhneme task přes GET /task/{id}.
-    const candidateClientOpts: { taskId: string; clientOpt: any }[] = [];
+    // 3) Dropdown metadata
+    const dropdownMeta = await getClientDropdownMeta();
+
+    // 4) Pro každého kandidáta zjistíme client (option value) – fallback na GET /task/{id}
+    const candidateClientResolved: {
+      taskId: string;
+      rawValue: any;
+      resolved: { key: string; label: string } | null;
+    }[] = [];
 
     for (const t of allCandidates) {
-      let clientOpt = getFieldValueFromTask(t, CF_PROJECT_CLIENT_NAME_ID);
+      let field = getFieldObjectFromTask(t, CF_PROJECT_CLIENT_NAME_ID);
 
-      if (!clientOpt) {
+      if (!field) {
         console.info(
-          "[Webhook] Client option not in list-task for",
+          "[Webhook] Client field object not in list-task for",
           t.id,
           "– fetching full task"
         );
         const full = await getTaskById(t.id);
-        clientOpt = getFieldValueFromTask(full, CF_PROJECT_CLIENT_NAME_ID);
-
-        console.info("[Webhook] Full task clientOpt for", t.id, "=", clientOpt);
+        field = getFieldObjectFromTask(full, CF_PROJECT_CLIENT_NAME_ID);
       }
 
-      candidateClientOpts.push({ taskId: t.id, clientOpt });
+      const rawValue = field?.value;
+      console.info(
+        "[Webhook] Raw client value for task",
+        t.id,
+        "=",
+        rawValue,
+        "type:",
+        typeof rawValue
+      );
+
+      const resolved = resolveClientOption(rawValue, dropdownMeta);
+      console.info("[Webhook] Resolved client for task", t.id, "=", resolved);
+
+      candidateClientResolved.push({
+        taskId: t.id,
+        rawValue,
+        resolved,
+      });
     }
 
     console.info(
-      "[Webhook] Candidate client options (after full-task fallback):",
-      candidateClientOpts
+      "[Webhook] Candidate client options (resolved):",
+      candidateClientResolved
     );
 
-    const tasksMissingClient = candidateClientOpts.filter(
-      (c) => !c.clientOpt
+    const tasksMissingClient = candidateClientResolved.filter(
+      (c) => c.resolved === null
     );
     if (tasksMissingClient.length > 0) {
       console.warn(
-        "[Webhook] Některé kandidátní tasky NEMÁJÍ klienta ani po GET /task – končím.",
+        "[Webhook] Některé kandidátní tasky NEMÁJÍ klienta ani po resolve – končím.",
         tasksMissingClient.map((t) => t.taskId)
       );
       return NextResponse.json({ ok: true });
     }
 
-    const uniqueClientOpts = Array.from(
-      new Set(candidateClientOpts.map((c) => String(c.clientOpt)))
+    // všichni mají resolved klienta
+    const clientKeys = candidateClientResolved.map(
+      (c) => c.resolved!.key
     );
+    const uniqueClientKeys = Array.from(new Set(clientKeys));
 
-    if (uniqueClientOpts.length > 1) {
+    if (uniqueClientKeys.length > 1) {
       console.warn(
-        "[Webhook] Kandidáti mají různé klienty – nechci míchat více klientů do jedné faktury. Končím.",
-        { uniqueClientOpts, candidateClientOpts }
+        "[Webhook] Kandidáti mají různé klienty (po resolve) – nechci míchat více klientů do jedné faktury. Končím.",
+        { uniqueClientKeys, candidateClientResolved }
       );
       return NextResponse.json({ ok: true });
     }
 
-    const sharedClientOptionId = uniqueClientOpts[0];
+    const sharedClientKey = uniqueClientKeys[0];
+    const anyResolved = candidateClientResolved[0].resolved!;
+    const clientName = anyResolved.label;
+
     console.info(
-      "[Webhook] Shared client option ID for this invoice:",
-      sharedClientOptionId
+      "[Webhook] Shared client key:",
+      sharedClientKey,
+      "client name:",
+      clientName
     );
 
     const candidates = allCandidates;
 
-    // 4) Hlavní trigger – aby se faktura negenerovala víckrát
+    // 5) Hlavní trigger – aby se faktura negenerovala víckrát
     const sortedCandidateIds = [...candidates]
       .map((t) => t.id)
       .sort((a, b) => a.localeCompare(b));
@@ -388,20 +489,6 @@ export async function POST(req: NextRequest) {
       );
       return NextResponse.json({ ok: true });
     }
-
-    // 5) Option ID -> label ("Jakub Nitran")
-    const clientOptionsMap = await getClientDropdownOptions();
-    const clientName = clientOptionsMap.get(sharedClientOptionId);
-
-    if (!clientName) {
-      console.warn(
-        "[Webhook] Client option id nemá label – končím. OptionId:",
-        sharedClientOptionId
-      );
-      return NextResponse.json({ ok: true });
-    }
-
-    console.info("[Webhook] Client name:", clientName);
 
     // 6) Najdi klienta v Clients listu
     const client = await findClientByName(clientName);

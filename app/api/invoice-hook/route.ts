@@ -12,6 +12,8 @@ import path from "path";
 // ClickUp
 const CLICKUP_API_TOKEN = process.env.CLICKUP_API_TOKEN!;
 const CLICKUP_API_BASE = "https://api.clickup.com/api/v2";
+// Timezone for displaying invoice dates (PDF/email)
+const INVOICE_TIMEZONE = process.env.INVOICE_TIMEZONE ?? "Europe/Prague";
 
 // List IDs (Video Production space)
 const PROJECTS_LIST_ID = "901518258148";
@@ -349,7 +351,8 @@ async function generateInvoicePdfBuffer(args: {
   const { client, invoiceMeta, items } = args;
 
   const formatCurrency = (value: number) => `${value.toFixed(2)} CZK`;
-  const formatDate = (value: Date) => value.toLocaleDateString("cs-CZ");
+  const formatDate = (value: Date) =>
+    value.toLocaleDateString("cs-CZ", { timeZone: INVOICE_TIMEZONE });
 
   const pdfDoc = await PDFDocument.create();
   (pdfDoc as any).registerFontkit(fontkit);

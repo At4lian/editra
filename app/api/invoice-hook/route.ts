@@ -745,11 +745,12 @@ for (const item of invoiceItems) {
   );
 
   // Do PROJECT tasku zapisujeme název faktury, např. "F2025-004_JK"
-  await updateTaskCustomField(
+ await updateTaskCustomField(
     item.taskId,
-    CF_PROJECT_INVOICE_NUMBER_ID,
-    invoiceName
+    CF_READY_TO_INVOICE_ID,
+    false
   );
+
 
   // Na Invoiced/ReadyToInvoice už NEŠAHÁME – má zůstat tak, jak je
 

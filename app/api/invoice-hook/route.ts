@@ -47,6 +47,7 @@ const CF_CLIENT_SHORT_CODE_ID = "fc6f7b03-7a31-4c04-ae7d-b5a0c0653f49"; // Short
 
 // --- Custom fields: INVOICES ("Invoices" list) ---
 
+const CF_INVOICE_VARIABLE_SYMBOL_ID = "208221e2-53ac-45c1-b46c-dc263ebf5455";
 const CF_INVOICE_TOTAL_ID = "2f695604-81dc-4cf3-a279-b5ab0a81f35f"; // Total (currency)
 const CF_INVOICE_DUE_DATE_ID = "4cb58b5f-4f97-4aca-8169-2ee0e1c91e91"; // Due Date (date)
 const CF_INVOICE_CLIENT_NAME_ID = "7d9683e2-9305-456c-8f4d-0ed4fe181b00"; // Client (short_text)
@@ -126,6 +127,13 @@ function getFieldObjectFromTask(
 ): ClickUpCustomField | undefined {
   return task.custom_fields?.find((f) => f.id === fieldId);
 }
+
+function buildVariableSymbol(invoiceNumber: number, issueDate: Date): string {
+  const year = issueDate.getFullYear();
+  const seq = String(invoiceNumber).padStart(4, "0"); // 0001, 0002, ...
+  return `${year}${seq}`; // např. 20250004
+}
+
 
 function cleanText(value: string | number | undefined | null): string {
   if (value === undefined || value === null) return "";
@@ -333,6 +341,7 @@ async function generateInvoicePdfBuffer(args: {
     invoiceNumber: number;
     total: number;
     issueDate: Date;
+    variableSymbol: string;
     dueDate: Date;
   };
   items: InvoiceItem[];
@@ -654,7 +663,7 @@ async function generateInvoicePdfBuffer(args: {
     { label: "Bank", value: "Fio banka" },
     { label: "Account Number", value: "1234567890/2010" },
     { label: "IBAN", value: "CZ12 2010 0000 0012 3456 7890" },
-    { label: "Variable Symbol", value: String(invoiceMeta.invoiceNumber) },
+    { label: "Variable Symbol", value: String(invoiceMeta.variableSymbol) },
   ];
 
   paymentDetails.forEach((detail) => {
@@ -931,11 +940,14 @@ export async function POST(req: NextRequest) {
     const humanNumber = `${year}-${padNumber(nextInvoiceNumber, 3)}`;
     const shortCode = client.shortCode || "CL";
     const invoiceName = `F${humanNumber}_${shortCode}`;
+    
 
     const issueDate = now;
     const dueDate = new Date(
       now.getTime() + client.defaultDueDays * 24 * 60 * 60 * 1000
     );
+    const variableSymbol = buildVariableSymbol(nextInvoiceNumber, issueDate);
+
 
     // 9) PDF
     const pdfBuffer = await generateInvoicePdfBuffer({
@@ -944,6 +956,7 @@ export async function POST(req: NextRequest) {
         invoiceName,
         invoiceNumber: nextInvoiceNumber,
         total,
+        variableSymbol,
         issueDate,
         dueDate,
       },
@@ -961,6 +974,7 @@ export async function POST(req: NextRequest) {
         { id: CF_INVOICE_DUE_DATE_ID, value: dueDate.getTime() },
         { id: CF_INVOICE_INVOICED_ID, value: true },
         { id: CF_INVOICE_PAID_ID, value: false },
+        { id: CF_INVOICE_VARIABLE_SYMBOL_ID, value: variableSymbol },
       ],
     });
 

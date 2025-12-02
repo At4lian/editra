@@ -3,7 +3,7 @@ import { Film } from "lucide-react";
 import { Container, Button } from "./ui";
 
 const Navbar = () => (
-  <header className="sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-slate-950/60">
+  <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/80 backdrop-blur supports-[backdrop-filter]:bg-slate-950/60">
     <Container className="flex items-center justify-between py-4">
       <Link href="/" className="flex items-center gap-2 text-white">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/90 shadow-lg shadow-sky-500/30">

@@ -632,8 +632,8 @@ async function generateInvoicePdfBuffer(args: {
 
   const paymentDetails = [
     { label: "Banka", value: "KB" },
-    { label: "????slo ????tu", value: "131-2804510267/0100" },
-    { label: "Variabiln?? symbol", value: String(invoiceMeta.variableSymbol) },
+    { label: "Číslo účtu", value: "131-2804510267/0100" },
+    { label: "Variabilní symbol", value: String(invoiceMeta.variableSymbol) },
   ];
   const footerY = 46;
   const totalBoxWidth = 220;

@@ -395,7 +395,8 @@ async function generateInvoicePdfBuffer(args: {
   const pdfDoc = await PDFDocument.create();
   (pdfDoc as any).registerFontkit(fontkit);
 
-  const page = pdfDoc.addPage([595, 842]); // A4 size
+  const pageSize: [number, number] = [595, 842];
+  let page = pdfDoc.addPage(pageSize); // A4 size
   const { width, height } = page.getSize();
 
   const fontBytes = await getInvoiceFontBytes();
@@ -413,6 +414,11 @@ async function generateInvoicePdfBuffer(args: {
 
   const margin = 48;
   const contentWidth = width - margin * 2;
+
+  const startNewPage = () => {
+    page = pdfDoc.addPage(pageSize);
+    return height - margin;
+  };
 
   let y = height - margin;
 
@@ -625,11 +631,6 @@ async function generateInvoicePdfBuffer(args: {
   y -= cardHeight + 30;
 
   // === ITEMS TABLE ===
-  drawText("Souhrn prací", margin, y, 12, colors.text);
-  y -= 14;
-  drawLine(margin, y, width - margin, y, colors.border, 1);
-  y -= 12;
-
   const showTimeColumn = showTimeTrackedOnInvoice;
   const colNameWidth = showTimeColumn ? contentWidth * 0.46 : contentWidth * 0.52;
   const colRateWidth = contentWidth * 0.18;
@@ -642,39 +643,61 @@ async function generateInvoicePdfBuffer(args: {
   const colTotalX = colTimeX + colTimeWidth;
   const rowHeight = 26;
   const nameCellPadding = 10;
+  const tableBottomY = 72;
 
-  // Header
-  page.drawRectangle({
-    x: margin,
-    y: y - rowHeight,
-    width: contentWidth,
-    height: rowHeight,
-    color: colors.tableHeader,
-  });
-  drawText("Popis", colNameX + nameCellPadding, y - 16, 10, colors.muted);
-  drawText(
-    "Hodinová sazba",
-    colRateX + nameCellPadding,
-    y - 16,
-    10,
-    colors.muted
-  );
-  if (showTimeColumn) {
-    drawText("?as", colTimeX + nameCellPadding, y - 16, 10, colors.muted);
-  }
-  drawText(
-    "Částka",
-    colTotalX + colTotalWidth - 10,
-    y - 16,
-    10,
-    colors.muted,
-    { align: "right" }
-  );
+  const drawItemsTableHeader = (startY: number, includeTitle: boolean) => {
+    let currentY = startY;
 
-  y -= rowHeight + 6;
+    if (includeTitle) {
+      drawText("Souhrn prac??", margin, currentY, 12, colors.text);
+      currentY -= 14;
+      drawLine(margin, currentY, width - margin, currentY, colors.border, 1);
+      currentY -= 12;
+    }
 
-  items.forEach((item, idx) => {
-    const rowY = y - idx * rowHeight;
+    page.drawRectangle({
+      x: margin,
+      y: currentY - rowHeight,
+      width: contentWidth,
+      height: rowHeight,
+      color: colors.tableHeader,
+    });
+    drawText(
+      "Popis",
+      colNameX + nameCellPadding,
+      currentY - 16,
+      10,
+      colors.muted
+    );
+    drawText(
+      "Hodinov?? sazba",
+      colRateX + nameCellPadding,
+      currentY - 16,
+      10,
+      colors.muted
+    );
+    if (showTimeColumn) {
+      drawText(
+        "??as",
+        colTimeX + nameCellPadding,
+        currentY - 16,
+        10,
+        colors.muted
+      );
+    }
+    drawText(
+      "????stka",
+      colTotalX + colTotalWidth - 10,
+      currentY - 16,
+      10,
+      colors.muted,
+      { align: "right" }
+    );
+
+    return currentY - rowHeight - 6;
+  };
+
+  const drawItemRow = (item: InvoiceItem, rowY: number, idx: number) => {
     if (idx % 2 === 1) {
       page.drawRectangle({
         x: margin,
@@ -712,13 +735,39 @@ async function generateInvoicePdfBuffer(args: {
       colors.text,
       { align: "right" }
     );
-  });
+  };
 
-  y -= rowHeight * items.length + 20;
+  let tableY = drawItemsTableHeader(y, true);
+
+  for (let idx = 0; idx < items.length; idx += 1) {
+    if (tableY - rowHeight < tableBottomY) {
+      tableY = drawItemsTableHeader(startNewPage(), true);
+    }
+    drawItemRow(items[idx], tableY, idx);
+    tableY -= rowHeight;
+  }
+
+  y = tableY - 20;
+  const paymentDetails = [
+    { label: "Banka", value: "KB" },
+    { label: "????slo ????tu", value: "131-2804510267/0100" },
+    { label: "Variabiln?? symbol", value: String(invoiceMeta.variableSymbol) },
+  ];
+  const footerY = 46;
+
+
 
   // === TOTALS ===
   const totalBoxWidth = 220;
   const totalBoxHeight = 80;
+  const totalsSectionHeight =
+    totalBoxHeight + 32 + 12 + 12 + 14 + paymentDetails.length * 16;
+  const totalsBottomY = footerY + 20;
+
+  if (y - totalsSectionHeight < totalsBottomY) {
+    y = startNewPage();
+  }
+
   const totalBoxX = margin + contentWidth - totalBoxWidth;
   const totalBoxY = y;
 
@@ -758,11 +807,6 @@ async function generateInvoicePdfBuffer(args: {
   drawLine(margin, y, width - margin, y, colors.border, 1);
   y -= 14;
 
-  const paymentDetails = [
-    { label: "Banka", value: "KB" },
-    { label: "Číslo účtu", value: "131-2804510267/0100" },
-    { label: "Variabilní symbol", value: String(invoiceMeta.variableSymbol) },
-  ];
 
   paymentDetails.forEach((detail) => {
     drawText(detail.label, margin, y, 10, colors.muted);
@@ -771,7 +815,6 @@ async function generateInvoicePdfBuffer(args: {
   });
 
   // === FOOTER ===
-  const footerY = 46;
   drawLine(margin, footerY + 12, width - margin, footerY + 12, colors.border, 0.8);
   const footerText = "Děkujeme za Vaši spolupráci";
   const footerWidth = font.widthOfTextAtSize(footerText, 10);

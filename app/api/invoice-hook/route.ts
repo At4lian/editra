@@ -649,7 +649,7 @@ async function generateInvoicePdfBuffer(args: {
     let currentY = startY;
 
     if (includeTitle) {
-      drawText("Souhrn prac??", margin, currentY, 12, colors.text);
+      drawText("Souhrn práce", margin, currentY, 12, colors.text);
       currentY -= 14;
       drawLine(margin, currentY, width - margin, currentY, colors.border, 1);
       currentY -= 12;
@@ -670,7 +670,7 @@ async function generateInvoicePdfBuffer(args: {
       colors.muted
     );
     drawText(
-      "Hodinov?? sazba",
+      "Hodinová sazba",
       colRateX + nameCellPadding,
       currentY - 16,
       10,
@@ -678,7 +678,7 @@ async function generateInvoicePdfBuffer(args: {
     );
     if (showTimeColumn) {
       drawText(
-        "??as",
+        "Čas",
         colTimeX + nameCellPadding,
         currentY - 16,
         10,
@@ -686,7 +686,7 @@ async function generateInvoicePdfBuffer(args: {
       );
     }
     drawText(
-      "????stka",
+      "Částka",
       colTotalX + colTotalWidth - 10,
       currentY - 16,
       10,
@@ -750,8 +750,8 @@ async function generateInvoicePdfBuffer(args: {
   y = tableY - 20;
   const paymentDetails = [
     { label: "Banka", value: "KB" },
-    { label: "????slo ????tu", value: "131-2804510267/0100" },
-    { label: "Variabiln?? symbol", value: String(invoiceMeta.variableSymbol) },
+    { label: "Číslo účtu", value: "131-2804510267/0100" },
+    { label: "Variabilní symbol", value: String(invoiceMeta.variableSymbol) },
   ];
   const footerY = 46;
 

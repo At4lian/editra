@@ -4,9 +4,36 @@ import Footer from "../../components/Footer";
 import { Container, SectionTitle, Card } from "../../components/ui";
 
 export const metadata: Metadata = {
-  title: "Blog – Editra",
-  description: "Novinky a články o postprodukci, VFX a technologii.",
+  title: "Blog o postprodukci videí a VFX",
+  description:
+    "Novinky a články o postprodukci videí, VFX, color gradingu a workflow.",
+  keywords: [
+    "blog",
+    "postprodukce videí",
+    "VFX",
+    "color grading",
+    "workflow",
+    "Plzeň",
+    "postprodukce",
+  ],
+  alternates: {
+    canonical: "/blog",
+  },
+  openGraph: {
+    title: "Blog o postprodukci videí a VFX - Editra",
+    description:
+      "Novinky a články o postprodukci videí, VFX, color gradingu a workflow.",
+    url: "/blog",
+  },
+  twitter: {
+    title: "Blog o postprodukci videí a VFX - Editra",
+    description:
+      "Novinky a články o postprodukci videí, VFX, color gradingu a workflow.",
+  },
 };
+
+
+
 
 export default function BlogPage() {
   return (

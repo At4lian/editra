@@ -34,7 +34,7 @@ const Hero = () => (
             transition={{ duration: 0.6 }}
             className="text-4xl font-semibold leading-tight text-white sm:text-6xl"
           >
-            Postprodukce & VFX v Plzni | <span className="text-sky-400">Editra</span>
+            Postprodukce videí & VFX v Plzni | <span className="text-sky-400">Editra</span>
           </motion.h1>
           <motion.p
             initial={{ opacity: 0, y: 10 }}

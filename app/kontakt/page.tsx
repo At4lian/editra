@@ -4,10 +4,36 @@ import Footer from "../../components/Footer";
 import ContactSection from "../../components/ContactSection";
 
 export const metadata: Metadata = {
-  title: "Kontakt – Editra",
+  title: "Kontakt - postprodukce videí v Plzni",
   description:
-    "Pojďme probrat váš projekt. E-mail, telefon a adresa studia Editra.",
+    "Kontaktujte postprodukční studio Editra v Plzni. E-mail, telefon a mapa studia.",
+  keywords: [
+    "kontakt",
+    "postprodukce videí",
+    "postprodukce videí v Plzni",
+    "Plzeň",
+    "Editra",
+    "postprodukční studio",
+    "telefon",
+    "email",
+  ],
+  alternates: {
+    canonical: "/kontakt",
+  },
+  openGraph: {
+    title: "Kontakt - postprodukce videí v Plzni - Editra",
+    description:
+      "Kontaktujte postprodukční studio Editra v Plzni. E-mail, telefon a mapa studia.",
+    url: "/kontakt",
+  },
+  twitter: {
+    title: "Kontakt - postprodukce videí v Plzni - Editra",
+    description:
+      "Kontaktujte postprodukční studio Editra v Plzni. E-mail, telefon a mapa studia.",
+  },
 };
+
+
 
 export default function ContactPage() {
   return (

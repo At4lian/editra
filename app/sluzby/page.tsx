@@ -4,10 +4,37 @@ import Footer from "../../components/Footer";
 import ServicesSection from "../../components/ServicesSection";
 
 export const metadata: Metadata = {
-  title: "Služby – Editra",
+  title: "Služby postprodukce videí v Plzni",
   description:
-    "Postprodukce, VFX, color grading a automatizace v Editra.",
+    "Postprodukce videí v Plzni: střih, VFX, color grading, mastering, QC a dodávky pro TV, online i kino.",
+  keywords: [
+    "postprodukce videí",
+    "postprodukce videí v Plzni",
+    "postprodukce Plzeň",
+    "VFX",
+    "color grading",
+    "střih videa",
+    "mastering",
+    "QC",
+    "finishing",
+  ],
+  alternates: {
+    canonical: "/sluzby",
+  },
+  openGraph: {
+    title: "Služby postprodukce videí v Plzni - Editra",
+    description:
+      "Postprodukce videí v Plzni: střih, VFX, color grading, mastering, QC a dodávky pro TV, online i kino.",
+    url: "/sluzby",
+  },
+  twitter: {
+    title: "Služby postprodukce videí v Plzni - Editra",
+    description:
+      "Postprodukce videí v Plzni: střih, VFX, color grading, mastering, QC a dodávky pro TV, online i kino.",
+  },
 };
+
+
 
 export default function ServicesPage() {
   return (

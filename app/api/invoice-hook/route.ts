@@ -498,7 +498,7 @@ async function generateInvoicePdfBuffer(args: {
   });
 
   drawText("Martin Simon", margin, height - 42, 26, rgb(1, 1, 1));
-  drawText("Video produkce", margin, height - 60, 11, rgb(1, 1, 1), {
+  drawText("Video postprodukce", margin, height - 60, 11, rgb(1, 1, 1), {
     opacity: 0.8,
   });
 

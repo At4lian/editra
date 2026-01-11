@@ -630,6 +630,19 @@ async function generateInvoicePdfBuffer(args: {
 
   y -= cardHeight + 30;
 
+  const paymentDetails = [
+    { label: "Banka", value: "KB" },
+    { label: "????slo ????tu", value: "131-2804510267/0100" },
+    { label: "Variabiln?? symbol", value: String(invoiceMeta.variableSymbol) },
+  ];
+  const footerY = 46;
+  const totalBoxWidth = 220;
+  const totalBoxHeight = 80;
+  const totalsSectionHeight =
+    totalBoxHeight + 32 + 12 + 12 + 14 + paymentDetails.length * 16;
+  const totalsBottomY = footerY + 20;
+
+
   // === ITEMS TABLE ===
   const showTimeColumn = showTimeTrackedOnInvoice;
   const colNameWidth = showTimeColumn ? contentWidth * 0.46 : contentWidth * 0.52;
@@ -643,7 +656,8 @@ async function generateInvoicePdfBuffer(args: {
   const colTotalX = colTimeX + colTimeWidth;
   const rowHeight = 26;
   const nameCellPadding = 10;
-  const tableBottomY = 72;
+  const tableBottomYNoTotals = 72;
+  const tableBottomYWithTotals = totalsBottomY + totalsSectionHeight + 20;
 
   const drawItemsTableHeader = (startY: number, includeTitle: boolean) => {
     let currentY = startY;
@@ -740,30 +754,28 @@ async function generateInvoicePdfBuffer(args: {
   let tableY = drawItemsTableHeader(y, true);
 
   for (let idx = 0; idx < items.length; idx += 1) {
-    if (tableY - rowHeight < tableBottomY) {
+    const remainingRows = items.length - idx;
+    let canFinishHere =
+      tableY - rowHeight * remainingRows >= tableBottomYWithTotals;
+    let bottomLimit = canFinishHere
+      ? tableBottomYWithTotals
+      : tableBottomYNoTotals;
+
+    if (tableY - rowHeight < bottomLimit) {
       tableY = drawItemsTableHeader(startNewPage(), true);
+      canFinishHere =
+        tableY - rowHeight * remainingRows >= tableBottomYWithTotals;
+      bottomLimit = canFinishHere
+        ? tableBottomYWithTotals
+        : tableBottomYNoTotals;
     }
+
     drawItemRow(items[idx], tableY, idx);
     tableY -= rowHeight;
   }
 
   y = tableY - 20;
-  const paymentDetails = [
-    { label: "Banka", value: "KB" },
-    { label: "Číslo účtu", value: "131-2804510267/0100" },
-    { label: "Variabilní symbol", value: String(invoiceMeta.variableSymbol) },
-  ];
-  const footerY = 46;
-
-
-
   // === TOTALS ===
-  const totalBoxWidth = 220;
-  const totalBoxHeight = 80;
-  const totalsSectionHeight =
-    totalBoxHeight + 32 + 12 + 12 + 14 + paymentDetails.length * 16;
-  const totalsBottomY = footerY + 20;
-
   if (y - totalsSectionHeight < totalsBottomY) {
     y = startNewPage();
   }

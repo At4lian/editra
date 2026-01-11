@@ -46,6 +46,7 @@ const CF_CLIENT_STREET_ID = "8d338e58-d810-499d-9b73-f920cfceb9ed"; // Street
 const CF_CLIENT_ZIP_ID = "ad5270c3-b0cd-487f-9430-80d898067a2f"; // ZIP
 const CF_CLIENT_ICO_ID = "ca5af7da-40cb-4f34-9902-1f88bb360e5d"; // IČ
 const CF_CLIENT_SHORT_CODE_ID = "fc6f7b03-7a31-4c04-ae7d-b5a0c0653f49"; // Short code
+const CF_CLIENT_SHOW_TIME_TRACKED_NAME = "ShowTimeTrackedOnInvoice"; // Checkbox name
 
 // --- Custom fields: INVOICES ("Invoices" list) ---
 
@@ -73,6 +74,7 @@ type ClickUpWebhookBody = {
 type ClickUpCustomField = {
   id: string;
   value: any;
+  name?: string;
   type?: string;
   type_config?: any;
 };
@@ -81,6 +83,7 @@ type ClickUpTask = {
   id: string;
   name: string;
   custom_fields?: ClickUpCustomField[];
+  time_spent?: number | string | null;
 };
 
 type ClientRecord = {
@@ -95,6 +98,7 @@ type ClientRecord = {
   dic: string;
   email: string;
   defaultDueDays: number;
+  showTimeTrackedOnInvoice: boolean;
 };
 
 type InvoiceItem = {
@@ -102,6 +106,7 @@ type InvoiceItem = {
   name: string;
   hourlyRate: number;
   totalPrice: number;
+  timeTrackedMs: number;
 };
 
 type ClientDropdownMeta = {
@@ -121,6 +126,18 @@ function padNumber(n: number, digits: number): string {
 
 function getFieldValueFromTask(task: ClickUpTask, fieldId: string): any {
   return task.custom_fields?.find((f) => f.id === fieldId)?.value ?? undefined;
+}
+
+function getFieldValueFromTaskByName(
+  task: ClickUpTask,
+  fieldName: string
+): any {
+  const normalized = fieldName.trim().toLowerCase();
+  return (
+    task.custom_fields?.find(
+      (f) => (f.name ?? "").trim().toLowerCase() === normalized
+    )?.value ?? undefined
+  );
 }
 
 function getFieldObjectFromTask(
@@ -203,6 +220,20 @@ async function getTaskById(taskId: string): Promise<ClickUpTask> {
   return data as ClickUpTask;
 }
 
+async function getTaskTimeTrackedMs(task: ClickUpTask): Promise<number> {
+  if (task.time_spent !== undefined && task.time_spent !== null) {
+    const asNumber = Number(task.time_spent);
+    return Number.isFinite(asNumber) ? asNumber : 0;
+  }
+
+  const full = await getTaskById(task.id);
+  const fullValue = full.time_spent;
+  if (fullValue === undefined || fullValue === null) return 0;
+
+  const asNumber = Number(fullValue);
+  return Number.isFinite(asNumber) ? asNumber : 0;
+}
+
 async function createInvoiceTask(payload: {
   name: string;
   custom_fields: { id: string; value: any }[];
@@ -283,6 +314,18 @@ async function findClientByName(clientName: string): Promise<ClientRecord | null
   if (!clientTask) return null;
 
   const get = (id: string) => getFieldValueFromTask(clientTask, id);
+  const getByName = (name: string) =>
+    getFieldValueFromTaskByName(clientTask, name);
+
+  const showTimeTrackedRaw = getByName(CF_CLIENT_SHOW_TIME_TRACKED_NAME);
+  let showTimeTrackedOnInvoice = !!showTimeTrackedRaw;
+  if (showTimeTrackedRaw === undefined) {
+    const fullClientTask = await getTaskById(clientTask.id);
+    showTimeTrackedOnInvoice = !!getFieldValueFromTaskByName(
+      fullClientTask,
+      CF_CLIENT_SHOW_TIME_TRACKED_NAME
+    );
+  }
 
   return {
     taskId: clientTask.id,
@@ -297,6 +340,7 @@ async function findClientByName(clientName: string): Promise<ClientRecord | null
     email: (get(CF_CLIENT_EMAIL_ID) as string) || "",
     defaultDueDays:
       Number(get(CF_CLIENT_DEFAULT_DUE_DAYS_ID) as number | string) || 14,
+    showTimeTrackedOnInvoice,
   };
 }
 
@@ -338,12 +382,15 @@ async function generateInvoicePdfBuffer(args: {
     dueDate: Date;
   };
   items: InvoiceItem[];
+  showTimeTrackedOnInvoice: boolean;
 }): Promise<Buffer> {
-  const { client, invoiceMeta, items } = args;
+  const { client, invoiceMeta, items, showTimeTrackedOnInvoice } = args;
 
   const formatCurrency = (value: number) => `${value.toFixed(2)} CZK`;
   const formatDate = (value: Date) =>
     value.toLocaleDateString("cs-CZ", { timeZone: INVOICE_TIMEZONE });
+  const formatTimeTracked = (ms: number) =>
+    `${round2(ms / 3600000).toFixed(2)} h`;
 
   const pdfDoc = await PDFDocument.create();
   (pdfDoc as any).registerFontkit(fontkit);
@@ -583,9 +630,16 @@ async function generateInvoicePdfBuffer(args: {
   drawLine(margin, y, width - margin, y, colors.border, 1);
   y -= 12;
 
-  const colNameWidth = contentWidth * 0.52;
+  const showTimeColumn = showTimeTrackedOnInvoice;
+  const colNameWidth = showTimeColumn ? contentWidth * 0.46 : contentWidth * 0.52;
   const colRateWidth = contentWidth * 0.18;
-  const colTotalWidth = contentWidth - colNameWidth - colRateWidth;
+  const colTimeWidth = showTimeColumn ? contentWidth * 0.12 : 0;
+  const colTotalWidth =
+    contentWidth - colNameWidth - colRateWidth - colTimeWidth;
+  const colNameX = margin;
+  const colRateX = margin + colNameWidth;
+  const colTimeX = colRateX + colRateWidth;
+  const colTotalX = colTimeX + colTimeWidth;
   const rowHeight = 26;
   const nameCellPadding = 10;
 
@@ -597,17 +651,20 @@ async function generateInvoicePdfBuffer(args: {
     height: rowHeight,
     color: colors.tableHeader,
   });
-  drawText("Popis", margin + nameCellPadding, y - 16, 10, colors.muted);
+  drawText("Popis", colNameX + nameCellPadding, y - 16, 10, colors.muted);
   drawText(
     "Hodinová sazba",
-    margin + colNameWidth + nameCellPadding,
+    colRateX + nameCellPadding,
     y - 16,
     10,
     colors.muted
   );
+  if (showTimeColumn) {
+    drawText("?as", colTimeX + nameCellPadding, y - 16, 10, colors.muted);
+  }
   drawText(
     "Částka",
-    margin + colNameWidth + colRateWidth + colTotalWidth - 10,
+    colTotalX + colTotalWidth - 10,
     y - 16,
     10,
     colors.muted,
@@ -630,17 +687,26 @@ async function generateInvoicePdfBuffer(args: {
 
     const nameMaxWidth = colNameWidth - nameCellPadding * 2;
     const nameText = fitTextToWidth(item.name, nameMaxWidth, 10);
-    drawText(nameText, margin + nameCellPadding, rowY - 16, 10, colors.text);
+    drawText(nameText, colNameX + nameCellPadding, rowY - 16, 10, colors.text);
     drawText(
       formatCurrency(item.hourlyRate),
-      margin + colNameWidth + nameCellPadding,
+      colRateX + nameCellPadding,
       rowY - 16,
       10,
       colors.text
     );
+    if (showTimeColumn) {
+      drawText(
+        formatTimeTracked(item.timeTrackedMs),
+        colTimeX + nameCellPadding,
+        rowY - 16,
+        10,
+        colors.text
+      );
+    }
     drawText(
       formatCurrency(item.totalPrice),
-      margin + colNameWidth + colRateWidth + colTotalWidth - 10,
+      colTotalX + colTotalWidth - 10,
       rowY - 16,
       10,
       colors.text,
@@ -940,18 +1006,24 @@ export async function POST(req: NextRequest) {
     const clientPayload = buildClientPayload(client);
 
     // 7) Položky faktury
-    const invoiceItems: InvoiceItem[] = candidates.map((t) => {
-      const hourlyRate =
-        Number(getFieldValueFromTask(t, CF_HOURLY_RATE_ID)) || 0;
-      const totalPrice =
-        Number(getFieldValueFromTask(t, CF_TOTAL_PRICE_ID)) || 0;
-      return {
-        taskId: t.id,
-        name: t.name,
-        hourlyRate: round2(hourlyRate),
-        totalPrice: round2(totalPrice),
-      };
-    });
+    const invoiceItems: InvoiceItem[] = await Promise.all(
+      candidates.map(async (t) => {
+        const hourlyRate =
+          Number(getFieldValueFromTask(t, CF_HOURLY_RATE_ID)) || 0;
+        const totalPrice =
+          Number(getFieldValueFromTask(t, CF_TOTAL_PRICE_ID)) || 0;
+        const timeTrackedMs = client.showTimeTrackedOnInvoice
+          ? await getTaskTimeTrackedMs(t)
+          : 0;
+        return {
+          taskId: t.id,
+          name: t.name,
+          hourlyRate: round2(hourlyRate),
+          totalPrice: round2(totalPrice),
+          timeTrackedMs,
+        };
+      })
+    );
 
     const total = round2(
       invoiceItems.reduce((sum, i) => sum + i.totalPrice, 0)
@@ -993,6 +1065,7 @@ export async function POST(req: NextRequest) {
         dueDate,
       },
       items: invoiceItems,
+      showTimeTrackedOnInvoice: client.showTimeTrackedOnInvoice,
     });
 
     // 10) Vytvořit invoice task

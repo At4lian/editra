@@ -203,15 +203,6 @@ async function getTaskById(taskId: string): Promise<ClickUpTask> {
   return data as ClickUpTask;
 }
 
-async function updateTask(taskId: string, body: any) {
-  const data = await clickUpFetch(`/task/${taskId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  return data;
-}
-
 async function createInvoiceTask(payload: {
   name: string;
   custom_fields: { id: string; value: any }[];
@@ -400,6 +391,30 @@ async function generateInvoicePdfBuffer(args: {
     return textWidth;
   };
 
+  const fitTextToWidth = (text: string, maxWidth: number, size: number) => {
+    const safe = cleanText(text);
+    if (font.widthOfTextAtSize(safe, size) <= maxWidth) return safe;
+
+    const glyphs = Array.from(safe);
+    const ellipsis = "…";
+    const ellipsisWidth = font.widthOfTextAtSize(ellipsis, size);
+    if (ellipsisWidth > maxWidth) return "";
+
+    let low = 0;
+    let high = glyphs.length;
+    while (low < high) {
+      const mid = Math.floor((low + high + 1) / 2);
+      const candidate = `${glyphs.slice(0, mid).join("")}${ellipsis}`;
+      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+        low = mid;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    return `${glyphs.slice(0, low).join("").trimEnd()}${ellipsis}`;
+  };
+
   const drawLine = (
     x1: number,
     y1: number,
@@ -482,12 +497,12 @@ async function generateInvoicePdfBuffer(args: {
     opacity: 0.9,
   });
 
-  drawText("EDITRA", margin, height - 42, 26, rgb(1, 1, 1));
-  drawText("Video Production Studio", margin, height - 60, 11, rgb(1, 1, 1), {
+  drawText("Martin Simon", margin, height - 42, 26, rgb(1, 1, 1));
+  drawText("Video produkce", margin, height - 60, 11, rgb(1, 1, 1), {
     opacity: 0.8,
   });
 
-  drawText("INVOICE", width - margin, height - 38, 18, rgb(1, 1, 1), {
+  drawText("Faktura", width - margin, height - 38, 18, rgb(1, 1, 1), {
     align: "right",
   });
   drawText(invoiceMeta.invoiceName, width - margin, height - 56, 12, rgb(1, 1, 1), {
@@ -507,21 +522,21 @@ async function generateInvoicePdfBuffer(args: {
     margin,
     pillY,
     pillWidth,
-    "INVOICE NO.",
+    "Faktura č.",
     `#${padNumber(invoiceMeta.invoiceNumber, 3)}`
   );
   drawSummaryPill(
     margin + pillWidth + 10,
     pillY,
     pillWidth,
-    "ISSUED",
+    "Datum vystavení",
     formatDate(invoiceMeta.issueDate)
   );
   drawSummaryPill(
     margin + (pillWidth + 10) * 2,
     pillY,
     pillWidth,
-    "DUE DATE",
+    "Datum splatnosti",
     formatDate(invoiceMeta.dueDate)
   );
 
@@ -532,12 +547,12 @@ async function generateInvoicePdfBuffer(args: {
   const cardHeight = 120;
 
   const supplierLines = [
-    "Editra s.r.o.",
-    "Petrikladova 123",
-    "110 00 Praha 1",
-    "Czech Republic",
-    "ICO: 12345678",
-    "DIC: CZ12345678",
+    "Martin Simon",
+    "Tutleky 91",
+    "51741 Kostelec nad Orlicí",
+    "Česká republika",
+    "IČO: 11979500",
+    "DIČ: neplátce DPH",
   ];
 
   const clientLines = [
@@ -546,24 +561,24 @@ async function generateInvoicePdfBuffer(args: {
       .split(",")
       .map((p) => p.trim())
       .filter(Boolean),
-    client.ico ? `ICO: ${cleanText(client.ico)}` : "",
-    client.dic ? `DIC: ${cleanText(client.dic)}` : "",
+    client.ico ? `IČO: ${cleanText(client.ico)}` : "",
+    client.dic ? `DIČ: ${cleanText(client.dic)}` : "",
   ].filter(Boolean);
 
-  drawInfoCard(margin, y, cardWidth, cardHeight, "Supplier", supplierLines);
+  drawInfoCard(margin, y, cardWidth, cardHeight, "Dodavatel", supplierLines);
   drawInfoCard(
     margin + cardWidth + 16,
     y,
     cardWidth,
     cardHeight,
-    "Client",
+    "Odběratel",
     clientLines
   );
 
   y -= cardHeight + 30;
 
   // === ITEMS TABLE ===
-  drawText("Work Summary", margin, y, 12, colors.text);
+  drawText("Souhrn prací", margin, y, 12, colors.text);
   y -= 14;
   drawLine(margin, y, width - margin, y, colors.border, 1);
   y -= 12;
@@ -572,6 +587,7 @@ async function generateInvoicePdfBuffer(args: {
   const colRateWidth = contentWidth * 0.18;
   const colTotalWidth = contentWidth - colNameWidth - colRateWidth;
   const rowHeight = 26;
+  const nameCellPadding = 10;
 
   // Header
   page.drawRectangle({
@@ -581,10 +597,16 @@ async function generateInvoicePdfBuffer(args: {
     height: rowHeight,
     color: colors.tableHeader,
   });
-  drawText("Description", margin + 10, y - 16, 10, colors.muted);
-  drawText("Hourly Rate", margin + colNameWidth + 10, y - 16, 10, colors.muted);
+  drawText("Popis", margin + nameCellPadding, y - 16, 10, colors.muted);
   drawText(
-    "Amount",
+    "Hodinová sazba",
+    margin + colNameWidth + nameCellPadding,
+    y - 16,
+    10,
+    colors.muted
+  );
+  drawText(
+    "Částka",
     margin + colNameWidth + colRateWidth + colTotalWidth - 10,
     y - 16,
     10,
@@ -606,8 +628,16 @@ async function generateInvoicePdfBuffer(args: {
       });
     }
 
-    drawText(cleanText(item.name), margin + 10, rowY - 16, 10, colors.text);
-    drawText(formatCurrency(item.hourlyRate), margin + colNameWidth + 10, rowY - 16, 10, colors.text);
+    const nameMaxWidth = colNameWidth - nameCellPadding * 2;
+    const nameText = fitTextToWidth(item.name, nameMaxWidth, 10);
+    drawText(nameText, margin + nameCellPadding, rowY - 16, 10, colors.text);
+    drawText(
+      formatCurrency(item.hourlyRate),
+      margin + colNameWidth + nameCellPadding,
+      rowY - 16,
+      10,
+      colors.text
+    );
     drawText(
       formatCurrency(item.totalPrice),
       margin + colNameWidth + colRateWidth + colTotalWidth - 10,
@@ -636,7 +666,7 @@ async function generateInvoicePdfBuffer(args: {
     borderWidth: 1.2,
   });
 
-  drawText("AMOUNT DUE", totalBoxX + 14, totalBoxY - 20, 10, colors.muted);
+  drawText("ČÁSTKA K ÚHRADĚ", totalBoxX + 14, totalBoxY - 20, 10, colors.muted);
   drawText(
     formatCurrency(invoiceMeta.total),
     totalBoxX + totalBoxWidth - 14,
@@ -646,7 +676,7 @@ async function generateInvoicePdfBuffer(args: {
     { align: "right" }
   );
   drawText(
-    `Due: ${formatDate(invoiceMeta.dueDate)}`,
+    `Datum Splatnosti: ${formatDate(invoiceMeta.dueDate)}`,
     totalBoxX + totalBoxWidth - 14,
     totalBoxY - 58,
     10,
@@ -657,16 +687,15 @@ async function generateInvoicePdfBuffer(args: {
   y = totalBoxY - totalBoxHeight - 32;
 
   // === PAYMENT DETAILS ===
-  drawText("Payment Details", margin, y, 12, colors.text);
+  drawText("Platební údaje", margin, y, 12, colors.text);
   y -= 12;
   drawLine(margin, y, width - margin, y, colors.border, 1);
   y -= 14;
 
   const paymentDetails = [
-    { label: "Bank", value: "Fio banka" },
-    { label: "Account Number", value: "1234567890/2010" },
-    { label: "IBAN", value: "CZ12 2010 0000 0012 3456 7890" },
-    { label: "Variable Symbol", value: String(invoiceMeta.variableSymbol) },
+    { label: "Banka", value: "KB" },
+    { label: "Číslo účtu", value: "131-2804510267/0100" },
+    { label: "Variabilní symbol", value: String(invoiceMeta.variableSymbol) },
   ];
 
   paymentDetails.forEach((detail) => {
@@ -678,7 +707,7 @@ async function generateInvoicePdfBuffer(args: {
   // === FOOTER ===
   const footerY = 46;
   drawLine(margin, footerY + 12, width - margin, footerY + 12, colors.border, 0.8);
-  const footerText = "Thank you for your business";
+  const footerText = "Děkujeme za Vaši spolupráci";
   const footerWidth = font.widthOfTextAtSize(footerText, 10);
   drawText(footerText, (width - footerWidth) / 2, footerY, 10, colors.muted);
 

@@ -601,8 +601,8 @@ async function generateInvoicePdfBuffer(args: {
 
   const supplierLines = [
     "Martin Simon",
-    "Tutleky 91",
-    "51741 Kostelec nad Orlicí",
+    "Kbelnice 42",
+    "33601 Letiny",
     "Česká republika",
     "IČO: 11979500",
     "DIČ: neplátce DPH",

@@ -636,11 +636,22 @@ async function generateInvoicePdfBuffer(args: {
     { label: "Variabilní symbol", value: String(invoiceMeta.variableSymbol) },
   ];
   const footerY = 46;
+  const totalsGap = 16;
   const totalBoxWidth = 220;
   const totalBoxHeight = 80;
-  const totalsSectionHeight =
-    totalBoxHeight + 32 + 12 + 12 + 14 + paymentDetails.length * 16;
-  const totalsBottomY = footerY + 20;
+  const paymentTitleOffset = 14;
+  const paymentDividerOffset = 10;
+  const paymentRowsOffset = 14;
+  const paymentRowHeight = 16;
+  const paymentBlockGap = 16;
+  const paymentBlockWidth = contentWidth - totalBoxWidth - paymentBlockGap;
+  const paymentBlockHeight =
+    paymentTitleOffset +
+    paymentDividerOffset +
+    paymentRowsOffset +
+    paymentDetails.length * paymentRowHeight;
+  const totalsBlockHeight = Math.max(totalBoxHeight, paymentBlockHeight);
+  const totalsBottomY = footerY + 18;
 
 
   // === ITEMS TABLE ===
@@ -657,7 +668,7 @@ async function generateInvoicePdfBuffer(args: {
   const rowHeight = 26;
   const nameCellPadding = 10;
   const tableBottomYNoTotals = 72;
-  const tableBottomYWithTotals = totalsBottomY + totalsSectionHeight + 20;
+  const tableBottomYWithTotals = totalsBottomY + totalsBlockHeight + totalsGap;
 
   const drawItemsTableHeader = (startY: number, includeTitle: boolean) => {
     let currentY = startY;
@@ -774,9 +785,9 @@ async function generateInvoicePdfBuffer(args: {
     tableY -= rowHeight;
   }
 
-  y = tableY - 20;
+  y = tableY - totalsGap;
   // === TOTALS ===
-  if (y - totalsSectionHeight < totalsBottomY) {
+  if (y - totalsBlockHeight < totalsBottomY) {
     y = startNewPage();
   }
 
@@ -811,19 +822,19 @@ async function generateInvoicePdfBuffer(args: {
     { align: "right" }
   );
 
-  y = totalBoxY - totalBoxHeight - 32;
+  y = totalBoxY - paymentTitleOffset;
 
   // === PAYMENT DETAILS ===
   drawText("Platební údaje", margin, y, 12, colors.text);
-  y -= 12;
-  drawLine(margin, y, width - margin, y, colors.border, 1);
-  y -= 14;
+  y -= paymentDividerOffset;
+  drawLine(margin, y, margin + paymentBlockWidth, y, colors.border, 1);
+  y -= paymentRowsOffset;
 
 
   paymentDetails.forEach((detail) => {
     drawText(detail.label, margin, y, 10, colors.muted);
     drawText(detail.value, margin + 120, y, 11, colors.text);
-    y -= 16;
+    y -= paymentRowHeight;
   });
 
   // === FOOTER ===

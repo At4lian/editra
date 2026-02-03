@@ -444,28 +444,65 @@ async function generateInvoicePdfBuffer(args: {
     return textWidth;
   };
 
-  const fitTextToWidth = (text: string, maxWidth: number, size: number) => {
-    const safe = cleanText(text);
-    if (font.widthOfTextAtSize(safe, size) <= maxWidth) return safe;
+  const breakLongWord = (word: string, maxWidth: number, size: number) => {
+    const glyphs = Array.from(word);
+    const lines: string[] = [];
+    let current = "";
 
-    const glyphs = Array.from(safe);
-    const ellipsis = "…";
-    const ellipsisWidth = font.widthOfTextAtSize(ellipsis, size);
-    if (ellipsisWidth > maxWidth) return "";
-
-    let low = 0;
-    let high = glyphs.length;
-    while (low < high) {
-      const mid = Math.floor((low + high + 1) / 2);
-      const candidate = `${glyphs.slice(0, mid).join("")}${ellipsis}`;
-      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
-        low = mid;
+    for (const glyph of glyphs) {
+      const candidate = `${current}${glyph}`;
+      if (
+        current.length === 0 ||
+        font.widthOfTextAtSize(candidate, size) <= maxWidth
+      ) {
+        current = candidate;
       } else {
-        high = mid - 1;
+        lines.push(current);
+        current = glyph;
       }
     }
 
-    return `${glyphs.slice(0, low).join("").trimEnd()}${ellipsis}`;
+    if (current) lines.push(current);
+    return lines;
+  };
+
+  const wrapTextToLines = (text: string, maxWidth: number, size: number) => {
+    const safe = cleanText(text).trim();
+    if (!safe) return [""];
+
+    const words = safe.split(/\s+/);
+    const lines: string[] = [];
+    let current = "";
+
+    for (const word of words) {
+      if (!current) {
+        if (font.widthOfTextAtSize(word, size) <= maxWidth) {
+          current = word;
+        } else {
+          const broken = breakLongWord(word, maxWidth, size);
+          lines.push(...broken.slice(0, -1));
+          current = broken[broken.length - 1] ?? "";
+        }
+        continue;
+      }
+
+      const candidate = `${current} ${word}`;
+      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+        current = candidate;
+      } else {
+        lines.push(current);
+        if (font.widthOfTextAtSize(word, size) <= maxWidth) {
+          current = word;
+        } else {
+          const broken = breakLongWord(word, maxWidth, size);
+          lines.push(...broken.slice(0, -1));
+          current = broken[broken.length - 1] ?? "";
+        }
+      }
+    }
+
+    if (current) lines.push(current);
+    return lines;
   };
 
   const drawLine = (
@@ -551,7 +588,7 @@ async function generateInvoicePdfBuffer(args: {
   });
 
   drawText("Martin Simon", margin, height - 42, 26, rgb(1, 1, 1));
-  drawText("Video postprodukce", margin, height - 60, 11, rgb(1, 1, 1), {
+  drawText("Multimedia", margin, height - 60, 11, rgb(1, 1, 1), {
     opacity: 0.8,
   });
 
@@ -665,8 +702,14 @@ async function generateInvoicePdfBuffer(args: {
   const colRateX = margin + colNameWidth;
   const colTimeX = colRateX + colRateWidth;
   const colTotalX = colTimeX + colTimeWidth;
-  const rowHeight = 26;
+  const headerRowHeight = 26;
+  const minRowHeight = 26;
+  const nameFontSize = 10;
+  const rowLineHeight = 12;
+  const rowPaddingTop = 8;
+  const rowPaddingBottom = 6;
   const nameCellPadding = 10;
+  const nameMaxWidth = colNameWidth - nameCellPadding * 2;
   const tableBottomYNoTotals = 72;
   const tableBottomYWithTotals = totalsBottomY + totalsBlockHeight + totalsGap;
 
@@ -682,9 +725,9 @@ async function generateInvoicePdfBuffer(args: {
 
     page.drawRectangle({
       x: margin,
-      y: currentY - rowHeight,
+      y: currentY - headerRowHeight,
       width: contentWidth,
-      height: rowHeight,
+      height: headerRowHeight,
       color: colors.tableHeader,
     });
     drawText(
@@ -719,69 +762,105 @@ async function generateInvoicePdfBuffer(args: {
       { align: "right" }
     );
 
-    return currentY - rowHeight - 6;
+    return currentY - headerRowHeight - 6;
   };
 
-  const drawItemRow = (item: InvoiceItem, rowY: number, idx: number) => {
+  type WrappedInvoiceItem = InvoiceItem & {
+    nameLines: string[];
+    rowHeight: number;
+  };
+
+  const drawItemRow = (item: WrappedInvoiceItem, rowTop: number, idx: number) => {
+    const rowHeight = item.rowHeight;
+    const rowBottom = rowTop - rowHeight;
+
     if (idx % 2 === 1) {
       page.drawRectangle({
         x: margin,
-        y: rowY - rowHeight + 4,
+        y: rowBottom,
         width: contentWidth,
         height: rowHeight,
         color: rgb(0.985, 0.99, 0.995),
       });
     }
 
-    const nameMaxWidth = colNameWidth - nameCellPadding * 2;
-    const nameText = fitTextToWidth(item.name, nameMaxWidth, 10);
-    drawText(nameText, colNameX + nameCellPadding, rowY - 16, 10, colors.text);
+    const textStartY = rowTop - rowPaddingTop - nameFontSize;
+    item.nameLines.forEach((line, lineIdx) => {
+      drawText(
+        line,
+        colNameX + nameCellPadding,
+        textStartY - lineIdx * rowLineHeight,
+        nameFontSize,
+        colors.text
+      );
+    });
+
     drawText(
       formatCurrency(item.hourlyRate),
       colRateX + nameCellPadding,
-      rowY - 16,
-      10,
+      textStartY,
+      nameFontSize,
       colors.text
     );
     if (showTimeColumn) {
       drawText(
         formatTimeTracked(item.timeTrackedMs),
         colTimeX + nameCellPadding,
-        rowY - 16,
-        10,
+        textStartY,
+        nameFontSize,
         colors.text
       );
     }
     drawText(
       formatCurrency(item.totalPrice),
       colTotalX + colTotalWidth - 10,
-      rowY - 16,
-      10,
+      textStartY,
+      nameFontSize,
       colors.text,
       { align: "right" }
     );
   };
 
+  const wrappedItems: WrappedInvoiceItem[] = items.map((item) => {
+    const nameLines = wrapTextToLines(item.name, nameMaxWidth, nameFontSize);
+    const lineCount = Math.max(1, nameLines.length);
+    const rowHeight = Math.max(
+      minRowHeight,
+      rowPaddingTop +
+        rowPaddingBottom +
+        (lineCount - 1) * rowLineHeight +
+        nameFontSize
+    );
+
+    return { ...item, nameLines, rowHeight };
+  });
+
+  const remainingHeights = new Array(wrappedItems.length + 1).fill(0);
+  for (let i = wrappedItems.length - 1; i >= 0; i -= 1) {
+    remainingHeights[i] = remainingHeights[i + 1] + wrappedItems[i].rowHeight;
+  }
+
   let tableY = drawItemsTableHeader(y, true);
 
-  for (let idx = 0; idx < items.length; idx += 1) {
-    const remainingRows = items.length - idx;
+  for (let idx = 0; idx < wrappedItems.length; idx += 1) {
+    const remainingRowsHeight = remainingHeights[idx];
     let canFinishHere =
-      tableY - rowHeight * remainingRows >= tableBottomYWithTotals;
+      tableY - remainingRowsHeight >= tableBottomYWithTotals;
     let bottomLimit = canFinishHere
       ? tableBottomYWithTotals
       : tableBottomYNoTotals;
 
+    const rowHeight = wrappedItems[idx].rowHeight;
     if (tableY - rowHeight < bottomLimit) {
       tableY = drawItemsTableHeader(startNewPage(), true);
       canFinishHere =
-        tableY - rowHeight * remainingRows >= tableBottomYWithTotals;
+        tableY - remainingRowsHeight >= tableBottomYWithTotals;
       bottomLimit = canFinishHere
         ? tableBottomYWithTotals
         : tableBottomYNoTotals;
     }
 
-    drawItemRow(items[idx], tableY, idx);
+    drawItemRow(wrappedItems[idx], tableY, idx);
     tableY -= rowHeight;
   }
 
